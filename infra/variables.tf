@@ -1,6 +1,7 @@
 variable "environment" {
   description = "Deployment environment name (e.g. dev, staging, prod)."
   type        = string
+  default     = "dev"
 }
 
 variable "project_name" {
@@ -11,6 +12,7 @@ variable "project_name" {
 variable "region" {
   description = "AWS region where resources will be deployed."
   type        = string
+  default     = "us-east-1"
 }
 
 variable "bucket_name" {

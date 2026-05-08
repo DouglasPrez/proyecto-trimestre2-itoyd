@@ -18,6 +18,61 @@ Aunque el requisito mínimo es un solo recurso, este bucket representa la base s
 
 ---
 
+## Extracto de `terraform plan`
+```
+Terraform will perform the following actions:
+
+  # aws_s3_bucket.main will be created
+  + resource "aws_s3_bucket" "main" {
+      + acceleration_status         = (known after apply)
+      + acl                         = (known after apply)
+      + arn                         = (known after apply)
+      + bucket                      = "proyecto-trimestre2-itoyd-dev"
+      + bucket_domain_name          = (known after apply)
+      + bucket_prefix               = (known after apply)
+      + bucket_regional_domain_name = (known after apply)
+      + force_destroy               = false
+      + hosted_zone_id              = (known after apply)
+      + id                          = (known after apply)
+      + object_lock_enabled         = (known after apply)
+      + policy                      = (known after apply)
+      + region                      = (known after apply)
+      + request_payer               = (known after apply)
+      + tags                        = {
+          + "Environment" = "dev"
+          + "Project"     = "proyecto-trimestre2-itoyd"
+        }
+      + tags_all                    = {
+          + "Environment" = "dev"
+          + "Project"     = "proyecto-trimestre2-itoyd"
+        }
+      + website_domain              = (known after apply)
+      + website_endpoint            = (known after apply)
+
+      + cors_rule (known after apply)
+
+      + grant (known after apply)
+
+      + lifecycle_rule (known after apply)
+
+      + logging (known after apply)
+
+      + object_lock_configuration (known after apply)
+
+      + replication_configuration (known after apply)
+
+      + server_side_encryption_configuration (known after apply)
+
+      + versioning (known after apply)
+
+      + website (known after apply)
+    }
+
+Plan: 1 to add, 0 to change, 0 to destroy.
+```
+
+---
+
 ## Explicación del Pipeline de CI
 
 Se implementó un pipeline utilizando GitHub Actions que se ejecuta automáticamente en cada pull request hacia la rama `main`. Este pipeline valida que la configuración de Terraform sea correcta antes de permitir su integración.
