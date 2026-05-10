@@ -50,8 +50,6 @@ También puedes usar un perfil configurado en AWS CLI:
 export AWS_PROFILE=mi-perfil
 ```
 
-> Se recomienda utilizar credenciales temporales o usuarios IAM con permisos mínimos necesarios (principio de menor privilegio).
-
 ---
 
 ## Inicializar Terraform
@@ -97,7 +95,7 @@ terraform apply -var-file="envs/dev/dev.tfvars"
 terraform apply -var-file="envs/dev/dev.tfvars" -auto-approve
 ```
 
-> ⚠️ Nota: Este comando crea recursos reales en AWS que pueden generar costos dependiendo del uso.
+> Nota: Este comando crea recursos reales en AWS que pueden generar costos dependiendo del uso.
 
 ---
 
