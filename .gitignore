@@ -30,3 +30,6 @@ Thumbs.db
 
 # PERMITIR evidencias
 !infra/evidence/**
+# Terraform local state - now managed remotely
+infra/terraform.tfstate
+infra/terraform.tfstate.backup

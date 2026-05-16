@@ -180,3 +180,7 @@ Esto garantiza una autenticación segura sin exponer credenciales en el reposito
     "SSE": "ENABLED"
 }
 ```
+
+### Remote State — Lock contention demostrado
+
+![State Lock Contention](evidence/state-lock-contention.png)
