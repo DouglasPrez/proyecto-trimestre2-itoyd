@@ -169,3 +169,14 @@ Esto garantiza una autenticación segura sin exponer credenciales en el reposito
     }
 }
 ```
+
+### Database — DynamoDB tabla desplegada
+
+```json
+{
+    "TableName": "proyecto-trimestre2-itoyd-dev-reservas",
+    "TableStatus": "ACTIVE",
+    "BillingMode": "PAY_PER_REQUEST",
+    "SSE": "ENABLED"
+}
+```
