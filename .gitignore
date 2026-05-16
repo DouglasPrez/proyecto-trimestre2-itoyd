@@ -1,12 +1,32 @@
 # Terraform
-.terraform/
+**/.terraform/*
 *.tfstate
 *.tfstate.*
 crash.log
 
 # Variables sensibles
 *.tfvars
-!envs/dev/dev.tfvars
+*.tfvars.json
 
-# Plan files
+# Terraform plans
 *.tfplan
+
+# Overrides
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Artefactos
+*.zip
+
+# PERMITIR evidencias
+!infra/evidence/**

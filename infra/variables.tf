@@ -19,3 +19,15 @@ variable "bucket_name" {
   description = "Name of the S3 bucket to create. Must be globally unique."
   type        = string
 }
+
+variable "lambda_memory_size" {
+  description = "Memory in MB for the API Lambda function (128–10240)."
+  type        = number
+  default     = 128
+}
+
+variable "lambda_timeout" {
+  description = "Timeout in seconds for the API Lambda function (1–900)."
+  type        = number
+  default     = 30
+}

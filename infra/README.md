@@ -135,3 +135,37 @@ El pipeline utiliza los siguientes secretos configurados en GitHub:
 Esto garantiza una autenticación segura sin exponer credenciales en el repositorio.
 
 ---
+
+## Evidence
+
+### Compute — Lambda desplegada
+
+```json
+{
+    "FunctionArn": "arn:aws:lambda:us-east-1:676206925447:function:proyecto-trimestre2-itoyd-dev-api",
+    "State": "Active"
+}
+```
+
+### Storage — S3 bucket desplegado
+
+```
+=== Versioning ===
+{                                                                                                                                                                                                                                                              
+    "Status": "Enabled"
+}
+
+=== Encryption ===
+{                                                                                                                                                                                                                                                              
+    "ServerSideEncryptionConfiguration": {
+        "Rules": [
+            {
+                "ApplyServerSideEncryptionByDefault": {
+                    "SSEAlgorithm": "AES256"
+                },
+                "BucketKeyEnabled": false
+            }
+        ]
+    }
+}
+```
