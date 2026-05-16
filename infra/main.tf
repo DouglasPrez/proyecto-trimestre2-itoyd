@@ -38,3 +38,15 @@ module "storage" {
   transition_days            = 30
   noncurrent_expiration_days = 90
 }
+
+# ---------------------------------------------------------------------------
+# Módulo de Base de Datos — DynamoDB (Delivery 2 / Entregable C)
+# ---------------------------------------------------------------------------
+module "database" {
+  source = "./modules/database"
+
+  environment   = var.environment
+  project_name  = var.project_name
+  billing_mode  = "PAY_PER_REQUEST"
+  ttl_attribute = "expires_at"
+}

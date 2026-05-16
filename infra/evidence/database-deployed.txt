@@ -1,0 +1,6 @@
+{                                                                                                                                                                                                                                                                                                                     
+    "TableName": "proyecto-trimestre2-itoyd-dev-reservas",
+    "TableStatus": "ACTIVE",
+    "BillingMode": "PAY_PER_REQUEST",
+    "SSE": "ENABLED"
+}

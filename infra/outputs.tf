@@ -1,10 +1,10 @@
 output "bucket_name" {
-  description = "Name of the provisioned S3 bucket."
+  description = "Name of the provisioned S3 bucket (Delivery 1)."
   value       = aws_s3_bucket.main.id
 }
 
 output "bucket_arn" {
-  description = "ARN of the provisioned S3 bucket."
+  description = "ARN of the provisioned S3 bucket (Delivery 1)."
   value       = aws_s3_bucket.main.arn
 }
 
@@ -26,4 +26,14 @@ output "storage_bucket_name" {
 output "storage_bucket_arn" {
   description = "ARN of the SportSpace storage bucket."
   value       = module.storage.bucket_arn
+}
+
+output "database_table_name" {
+  description = "Name of the DynamoDB reservas table."
+  value       = module.database.table_name
+}
+
+output "database_table_arn" {
+  description = "ARN of the DynamoDB reservas table."
+  value       = module.database.table_arn
 }
