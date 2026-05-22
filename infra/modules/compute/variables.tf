@@ -11,7 +11,7 @@ variable "name" {
 variable "memory_size" {
   description = "Amount of memory in MB allocated to the Lambda function (128–10240)."
   type        = number
-  default     = 128
+  default     = 256
 }
 
 variable "timeout" {
