@@ -1,22 +1,20 @@
-# UNIVERSIDAD GALILEO
-## Postgrado en Diseño y Desarrollo de Software
 ## Infraestructura en la Nube
 
----
-
-# ENTREGA 1 — PITCH, SCOPE Y MOCKUPS
-
 # SportSpace
-## Sistema de Reservas de Canchas Deportivas y Espacios Recreativos
-
-**Opción 6 — Sistema de Reservas y Disponibilidad**
-
+### Sistema de Reservas y Disponibilidad de Canchas Deportivas y Espacios Recreativos
 
 | | |
 |---|---|
 | **Integrantes** | Douglas Perez · Carlos Daniel Martinez · Ana Isabel Perez |
 
 ---
+
+## 0. Resumen de Cambios (Iteración respecto a Entrega 1)
+
+A partir de la retroalimentación obtenida y nuestras discusiones técnicas en esta segunda iteración, realizamos los siguientes ajustes respecto a nuestra propuesta inicial en la Entrega 1:
+* **Decisión de Cómputo:** Inicialmente no teníamos claro si nos iríamos por contenedores o funciones Serverless. Tras analizar el comportamiento de las reservas (tráfico intermitente y en ráfagas), decidimos descartar los contenedores (que implican pagos por capacidad continua) y elegimos **AWS Lambda**. Esto nos permite mantener los costos bajos durante la fase MVP.
+* **Definición del Modelo de Datos:** Pasamos de un concepto ambiguo a un modelo concreto basado en **AWS DynamoDB**. Decidimos abandonar la idea de usar bases de datos relacionales tradicionales porque las consultas que nos interesan (disponibilidad por fecha/cancha y reservas por usuario) pueden resolverse muy bien utilizando un esquema de tabla única y Global Secondary Indexes (GSIs). 
+* **Manejo de Archivos:** Nos dimos cuenta de que requeríamos almacenar los comprobantes inmutables generados para los usuarios, por lo que decidimos acoplar un almacenamiento de objetos con **Amazon S3** específicamente para dichos *vouchers*.
 
 ## 1. Resumen Ejecutivo
 
@@ -311,51 +309,105 @@ Vista consolidada de todas las reservas activas del usuario. Cada tarjeta muestr
 
 ---
 
-## 8. Preguntas Abiertas
+## 8. Diagrama de Contexto
+
+El siguiente diagrama muestra el límite del sistema SportSpace y sus integraciones externas:
+
+```mermaid
+flowchart TD
+    %% Actores
+    U((Usuario))
+    A((Administrador))
+
+    %% Sistema Central
+    subgraph Boundary [SportSpace]
+        API[Sistema Backend\nMotor de disponibilidad y reservas]
+    end
+
+    %% Sistemas Externos
+    Pago[Pasarela de Pagos\nProcesa cobros]
+    Notif[Notificaciones\nCorreos y SMS]
+    IdP[Proveedor Identidad\nAuth · Registro y Login]
+
+    %% Relaciones
+    U -->|Consulta y reserva| API
+    A -->|Administra horarios| API
+    
+    API -->|Inicia pagos| Pago
+    API -->|Delega alertas| Notif
+    API -->|Valida sesiones| IdP
+
+    %% Estilos tipo C4
+    classDef actor fill:#083F8C,stroke:#073B80,color:#fff,stroke-width:2px;
+    classDef system fill:#1168BD,stroke:#0B4884,color:#fff,stroke-width:2px;
+    classDef external fill:#999999,stroke:#6B6B6B,color:#fff,stroke-width:2px;
+    classDef boundary fill:none,stroke:#444,stroke-width:2px,stroke-dasharray: 5 5;
+
+    class U,A actor;
+    class API system;
+    class Pago,Notif,IdP external;
+    class Boundary boundary;
+```
+
+---
+
+## 9. Decisión de Cómputo
+
+Elegimos **AWS Lambda** como plataforma de cómputo principal para los endpoints de la API de nuestro sistema.
+
+* **Enfoque Elegido:** Serverless (AWS Lambda usando Python 3.12).
+* **Trade-off 1 (Costo por Invocación vs. Costo Constante - Lambda vs ECS Fargate):** Decidimos optar por el esquema Serverless debido a que el tráfico de SportSpace tiende a ser intermitente y presenta ráfagas (reservas que caen de golpe a cierta hora). En lugar de usar ECS Fargate, que requeriría pagar por contenedores encendidos 24/7 escuchando tráfico, aceptamos perder el entorno siempre activo para lograr que nuestro MVP se mantenga dentro del "Free Tier", pagando únicamente cuando hay invocaciones.
+* **Trade-off 2 (Simplicidad de Operación vs. Control del Entorno):** Aceptamos perder el control sobre el sistema operativo subyacente y las configuraciones de red internas que tendríamos con instancias EC2 o contenedores, ganando a cambio el no tener que preocuparnos por parches de seguridad, mantenimiento de servidores o configuración de métricas de Auto Scaling.
+* **Desventaja Reconocida:** *Cold Starts* (Arranques en frío). Somos conscientes de que, al estar en reposo, la primera invocación a nuestra API de reservas tomará un tiempo extra (típicamente 200-500ms) mientras el contenedor de la Lambda se aprovisiona y levanta el intérprete de Python, lo cual podría degradar levemente la percepción inicial de rendimiento para el primer usuario tras inactividad. 
+
+---
+
+## 10. Modelo de Datos y Almacenamiento
+
+### 10.1 Estructura en Base de Datos (DynamoDB)
+Decidimos implementar **AWS DynamoDB** (base de datos NoSQL gestionada) utilizando un esquema de tabla única (Single Table Design) alrededor de la tabla principal `reservas`.
+
+**Patrones de Acceso e Índices que definimos:**
+1. **UC-01 (Consultar disponibilidad):** Creamos un GSI (Global Secondary Index) llamado `espacio-fecha-index`. Esto nos permite consultar rápidamente por el ID de la cancha como llave de partición y buscar rangos de tiempo para verificar la disponibilidad real.
+2. **UC-03 (Consultar mis reservas):** Creamos un segundo GSI llamado `usuario-fecha-index` para poder recuperar todo el historial y reservas futuras de un deportista en particular.
+3. **Reserva atómica y expiración:** Implementamos el atributo `expires_at` que hace uso de la funcionalidad TTL (Time-to-Live) nativa de DynamoDB. Esto nos permite eliminar automáticamente las reservas temporales (lock optimista) si el usuario no concreta el pago en 15 minutos.
+
+### 10.2 Almacenamiento de Objetos (Amazon S3)
+* Para cada reserva pagada y confirmada, el sistema genera un **voucher o comprobante** en formato documento/imagen. Decidimos guardar estos datos inmutables en un bucket de **Amazon S3** con reglas de ciclo de vida (vouchers/prefix), segregando claramente los datos estructurados transaccionales de los archivos estáticos.
+
+### 10.3 Caché
+* **Decisión de Caché:** Decidimos omitir la implementación de Redis o Memcached en esta etapa. Al tratarse de un sistema de reservas susceptible a colisiones directas (doble *booking*), priorizamos lecturas de consistencia fuerte directamente contra la base de datos maestra para evaluar la disponibilidad en tiempo real, evitando riesgos de overbooking generados por cachés desincronizados.
+
+---
+
+## 11. Preguntas Abiertas
 
 Las siguientes preguntas permanecen abiertas. Se espera que se resuelvan en entregas posteriores conforme se cubran los temas técnicos correspondientes.
 
-### 8.1 Preguntas de Producto
+### 11.1 Preguntas de Producto
 
 - **¿Cómo se maneja un complejo con decenas de canchas?** ¿La vista de agenda del admin es viable con 20+ espacios simultáneos? ¿Se necesita paginación o filtros adicionales?
 - **¿Reservas grupales o por equipo?** El diseño actual asume una reserva = un usuario. ¿Se requiere asignar múltiples personas a una misma reserva?
 
-### 8.2 Preguntas Técnicas
+### 11.2 Preguntas Técnicas
 
-- **[E2 — Cómputo]:** ¿Lambda o contenedores? El endpoint de disponibilidad hace una consulta que podría ser costosa en cold starts de Lambda. Pendiente de decidir con los temas de cómputo.
-- **[E2 — Datos]:** ¿Cómo modelar los espacios de disponibilidad: calculados en tiempo real consultando reservas/bloqueos, o materializados en una tabla de disponibilidad? Trade-off entre consistencia y rendimiento a resolver.
-- **[E2 — Datos]:** ¿SQL o NoSQL para las reservas? La naturaleza relacional (Espacio → Reserva → Usuario) sugiere SQL, pero el volumen de consultas de disponibilidad podría beneficiarse de NoSQL. Pendiente.
-- **[E3 — Red]:** Número de Availability Zones y si se justifica alta disponibilidad para el MVP.
-- **[E4 — Asíncrono]:** Mecanismo exacto para el bloqueo optimista con expiración: ¿SQS con delay? ¿Redis TTL? ¿DynamoDB TTL? Pendiente.
-- **[E5 — Seguridad]:** Estrategia de autenticación: ¿JWT validado en API Gateway o en el servicio? ¿Cognito o Auth0?
+- **[E3 — Red]:** Número de Availability Zones y si se justifica alta disponibilidad para el MVP. ¿Cómo estructuraremos la VPC interconectando la API Gateway con Lambda y Dynamo de forma segura?
+- **[E4 — Asíncrono]:** Mecanismo exacto para la respuesta del proveedor notificaciones y el workflow de pago sin encolar la API Gateway (EventBridge vs SQS).
+- **[E5 — Seguridad]:** Estrategia de autenticación: ¿JWT validado en API Gateway o directo en el servicio? ¿Integración con Cognito o Auth0?
 - **[E5 — Costos]:** Estimado de costo mensual para un complejo mediano (~50 reservas/día). Pendiente de calculadora de proveedor.
 
 ---
 
-## Anexo IA — Uso de Inteligencia Artificial en E1
+## 12. Anexo IA — Uso de Inteligencia Artificial
 
-Este anexo documenta el uso de herramientas de IA (Claude, Sonnet 4.6) durante la elaboración de esta entrega, conforme a la política del curso.
+Este anexo documenta el uso de herramientas de IA durante la elaboración del proyecto, conforme a la política del curso.
 
-### Qué le pedimos a la IA
+### 12.1 E2 (Cómputo y Datos)
+- **Analizar Trade-offs:** Utilizamos la IA para validar nuestras hipótesis sobre ECS Fargate frente a Lambda. Le planteamos nuestro escenario de tráfico en ráfagas para el MVP, y utilizamos su análisis para confirmar las ventajas del esquema de facturación "pago por uso" del Free Tier de Lambda frente a la carga continua de un contenedor inactivo.
+- **Diseño del Modelo NoSQL:** Le pedimos a la IA evaluar nuestro planteamiento para modelar un dominio tradicionalmente relacional usando Single Table Design. La IA nos ayudó a confirmar la pertinencia técnica de los GSIs (`espacio-fecha-index` y `usuario-fecha-index`), dándonos seguridad de que con DynamoDB eliminaríamos cuellos de botella por JOINs para nuestros patrones principales (disponibilidad y listado de historial).
 
-- Proponer un conjunto de casos de uso priorizados para el dominio y sugerir criterios de éxito medibles.
-- Generar mockups para las pantallas principales.
-- Redactar el resumen ejecutivo, el scope y las preguntas abiertas.
-
-### Qué aceptamos sin cambios significativos
-
-- Los mockups como punto de partida visual: la distribución de elementos es funcional.
-- Aceptamos la mayoría de casos de uso dados, debido a que tenían sentido en base a lo que queríamos construir.
-- Aceptamos la mayoría de las preguntas abiertas, debido a que están relacionadas con puntos importantes del proyecto y sus decisiones se tomarán en las entregas posteriores.
-
-### Qué editamos o ajustamos
-
-- **Casos de uso:** la IA propuso inicialmente 10 user stories, muchas genéricas. Redujimos a 7 y ajustamos los criterios de éxito para que fueran medibles y específicos del dominio.
-- **Bloqueo optimista:** la IA sugirió que fuera de 5 minutos como "reserva temporal"; decidimos nombrarlo explícitamente como patrón de bloqueo optimista con un tiempo de 15 minutos y agregarlo al scope y al mockup de confirmación con el contador visible.
-
-### Qué descartamos
-
-- La IA sugirió incluir un "sistema de calificaciones y reseñas de las canchas" como funcionalidad. Se descartó porque excede el scope del MVP y no ejercita componentes adicionales del curso.
-- Propuso un mockup de "mapa de canchas cercanas" con integración a Google Maps. Se descartó para esta entrega porque introduce dependencias externas no necesarias para los casos de uso P0.
-- Sugirió modelar el sistema con microservicios desde el inicio (servicio de reservas, servicio de pagos, servicio de notificaciones separados). Se decidió mantener la arquitectura como un monolito modular para E1 y evaluar en E2/E3 si la separación en servicios es justificada.
-- Descartamos las preguntas obvias o genéricas del listado original de preguntas abiertas.
+### 12.2 E1 (Scope y Mockups)
+- **Qué le pedimos a la IA (Claude, Sonnet 4.6):** Proponer casos de uso priorizados, sugerir criterios de éxito, generar mockups y redactar el scope.
+- **Qué aceptamos sin cambios:** Mockups como punto de visual funcional y la mayoría de preguntas de contexto futuro.
+- **Qué editamos:** Redujimos historias de 10 a 7, e incorporamos el "bloqueo optimista" de 15 minutos en la reserva en vez del valor mínimo propuesto.
+- **Qué descartamos:** Sistema de reseñas de canchas (fuera de scope), mapa con Google Maps (evitando dependencias prescindibles) y descartamos la arquitectura por microservicios en favor de una monolítica Serverless controlada.
