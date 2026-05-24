@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 seed.py)",
+      "Bash(npm install *)",
+      "Bash(python3 -m uvicorn app.main:app --reload --port 8000)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(curl -s http://localhost:8000/complexes)",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -s -X POST http://localhost:8000/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"juan@email.com\",\"password\":\"password123\"}')",
+      "Bash(npx tsc *)",
+      "Bash(node -e \"const p = require\\('./node_modules/date-fns/package.json'\\); console.log\\(p.version, p.types, p.main\\)\")",
+      "Bash(node -e \"const p = require\\('./node_modules/date-fns/package.json'\\); console.log\\(JSON.stringify\\(p.exports ? Object.keys\\(p.exports\\).slice\\(0,3\\) : 'no exports', null, 2\\)\\)\")",
+      "Bash(node -e \"const p = require\\('./node_modules/date-fns/package.json'\\); console.log\\(JSON.stringify\\(p.exports['.'], null, 2\\)\\)\")",
+      "Bash(node -e \"require.resolve\\('date-fns'\\)\")",
+      "Bash(npm run *)",
+      "Bash(lsof -ti:8000)",
+      "Bash(xargs kill -9)"
+    ]
+  }
+}
