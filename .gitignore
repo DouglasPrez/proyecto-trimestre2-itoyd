@@ -33,3 +33,24 @@ Thumbs.db
 # Terraform local state - now managed remotely
 infra/terraform.tfstate
 infra/terraform.tfstate.backup
+
+# ==========================================
+# App / Frontend (React + Vite)
+# ==========================================
+App/frontend/node_modules/
+App/frontend/dist/
+App/frontend/.env
+App/frontend/.env.local
+App/frontend/.env.production
+
+# ==========================================
+# App / Backend (FastAPI + Python)
+# ==========================================
+App/backend/__pycache__/
+App/backend/**/__pycache__/
+App/backend/*.pyc
+App/backend/.venv/
+App/backend/venv/
+App/backend/.env
+App/backend/*.db
+App/backend/*.sqlite
