@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 
 from .database import get_db
 from . import models
+from .config import settings
 
-SECRET_KEY = "sportspace-dev-secret-change-in-production-2026"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 24
+SECRET_KEY = settings.secret_key
+ALGORITHM = settings.algorithm
+ACCESS_TOKEN_EXPIRE_HOURS = settings.access_token_expire_hours
 
 pwd_context = CryptContext(schemes=["sha256_crypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
