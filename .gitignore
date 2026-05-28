@@ -4,6 +4,9 @@
 *.tfstate.*
 crash.log
 
+# excluir carpeta de instructions de la raiz.
+instructions/
+
 # Variables sensibles
 *.tfvars
 *.tfvars.json
