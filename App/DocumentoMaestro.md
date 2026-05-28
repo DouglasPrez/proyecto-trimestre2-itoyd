@@ -521,7 +521,7 @@ Los recursos en subnets privadas (Lambda) necesitan acceder a DynamoDB y S3. Hay
 Justificación:
 - DynamoDB y S3 son los **únicos** servicios AWS que la Lambda de SportSpace necesita acceder. Ambos soportan Gateway Endpoints (gratuitos).
 - Un NAT Gateway añadiría ~$64/mes (2 AZs × $32) solo por estar encendido, sin contar el tráfico. Para un MVP con ~50 reservas/día, este costo no se justifica.
-- El tráfico por VPC Endpoint nunca abandona la red de AWS, lo cual **mejora la seguridad** (no pasa por internet público) y **reduce latencia** (sin saltos额外).
+- El tráfico por VPC Endpoint nunca abandona la red de AWS, lo cual **mejora la seguridad** (no pasa por internet público) y **reduce latencia** (sin saltos).
 - Los VPC Endpoints se resuelven a nivel de tabla de ruteo: una vez configurados, la Lambda accede a DynamoDB y S3 usando los mismos SDKs, sin cambios de código.
 
 **Desventaja reconocida:** Si en el futuro la Lambda necesita acceder a servicios externos (pasarela de pagos, proveedor de notificaciones vía HTTP), necesitaremos agregar un NAT Gateway. Esta decisión se reevaluará en E4/E5 cuando definamos los flujos asíncronos y la integración con servicios de terceros.
