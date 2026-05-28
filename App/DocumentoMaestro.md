@@ -478,7 +478,7 @@ El siguiente diagrama muestra los bloques principales del sistema ubicados en su
 
 ## 12. Diseño de Red
 
-### 14.1 VPC y CIDR
+### 12.1 VPC y CIDR
 
 Definimos una **VPC con CIDR `10.0.0.0/16`** para alojar todos los recursos de SportSpace. Este rango proporciona 65,536 direcciones IP privadas, espacio más que suficiente para el MVP y para crecimiento futuro (múltiples ambientes dev/staging/prod dentro del mismo rango usando sub-rangos).
 
@@ -487,7 +487,7 @@ Justificación del tamaño:
 - Un rango más pequeño (ej. `/20` con 4,096 IPs) sería suficiente para el MVP, pero `/16` nos da flexibilidad para separar ambientes sin re-diseñar la VPC.
 - Permite subnetting claro: ambiente dev en `10.0.0.0/18`, staging en `10.0.64.0/18`, prod en `10.0.128.0/18`.
 
-### 14.2 Subnets y Availability Zones
+### 12.2 Subnets y Availability Zones
 
 Elegimos **2 Availability Zones** (us-east-1a, us-east-1b) para el MVP.
 
@@ -507,7 +507,7 @@ Elegimos **2 Availability Zones** (us-east-1a, us-east-1b) para el MVP.
 | **Complejidad** | Menor: 4 subnets totales. | Mayor: 6 subnets, más reglas de ruteo. |
 | **Justificación MVP** | Para ~50 reservas/día, 2 AZs ofrecen alta disponibilidad suficiente. Una tercera AZ no mejora la experiencia del usuario final en este volumen. | Se reconsiderará si el sistema escala a cientos de reservas/día o si se agrega un SLA contractual. |
 
-### 14.3 Conectividad Saliente — NAT Gateway vs VPC Endpoints
+### 12.3 Conectividad Saliente — NAT Gateway vs VPC Endpoints
 
 Los recursos en subnets privadas (Lambda) necesitan acceder a DynamoDB y S3. Hay dos mecanismos para darles conectividad:
 
@@ -526,14 +526,14 @@ Justificación:
 
 **Desventaja reconocida:** Si en el futuro la Lambda necesita acceder a servicios externos (pasarela de pagos, proveedor de notificaciones vía HTTP), necesitaremos agregar un NAT Gateway. Esta decisión se reevaluará en E4/E5 cuando definamos los flujos asíncronos y la integración con servicios de terceros.
 
-### 14.4 Tablas de Ruteo
+### 12.4 Tablas de Ruteo
 
 | Route Table | Asociada a | Rutas |
 |-------------|-----------|-------|
 | `rt-public` | Subnets públicas (`public-a`, `public-b`) | `0.0.0.0/0` → Internet Gateway; `10.0.0.0/16` → local |
 | `rt-private-app` | Subnets privadas de app (`private-app-a`, `private-app-b`) | `10.0.0.0/16` → local; DynamoDB → VPC Endpoint; S3 → VPC Endpoint |
 
-### 14.5 Security Groups (versión inicial)
+### 12.5 Security Groups (versión inicial)
 
 Definimos Security Groups por capa con reglas explícitas. La seguridad detallada (IAM, KMS, Secrets Manager) corresponde a E5.
 
@@ -562,12 +562,12 @@ Usuario → HTTPS (internet) → API Gateway → Lambda (SG-Lambda, subnets priv
 
 Las siguientes preguntas permanecen abiertas. Se espera que se resuelvan en entregas posteriores conforme se cubran los temas técnicos correspondientes.
 
-### 11.1 Preguntas de Producto
+### 13.1 Preguntas de Producto
 
 - **¿Cómo se maneja un complejo con decenas de canchas?** ¿La vista de agenda del admin es viable con 20+ espacios simultáneos? ¿Se necesita paginación o filtros adicionales?
 - **¿Reservas grupales o por equipo?** El diseño actual asume una reserva = un usuario. ¿Se requiere asignar múltiples personas a una misma reserva?
 
-### 11.2 Preguntas Técnicas
+### 13.2 Preguntas Técnicas
 
 - **[E3 — Red]:** ~~Número de Availability Zones y si se justifica alta disponibilidad para el MVP. ¿Cómo estructuraremos la VPC interconectando la API Gateway con Lambda y Dynamo de forma segura?~~ **Resuelto en esta entrega.** Se definió VPC con CIDR `10.0.0.0/16`, 2 AZs, subnets públicas/privadas, y VPC Gateway Endpoints para DynamoDB y S3. La conectividad saliente a internet queda pendiente para E4/E5.
 - **[E3 — Red (nueva)]:** ¿Conviene mantener la Lambda fuera de la VPC para evitar el cold start adicional por ENI (Elastic Network Interface)? Dejarla fuera simplificaría el diseño de red pero perderíamos el aislamiento de capa privada. Se resolverá en E5 cuando evaluemos el impacto real del cold start con métricas.
