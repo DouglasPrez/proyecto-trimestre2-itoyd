@@ -9,12 +9,22 @@
 
 ---
 
-## 0. Resumen de Cambios (Iteración respecto a Entrega 1)
+## 0. Resumen de Cambios
 
-A partir de la retroalimentación obtenida y nuestras discusiones técnicas en esta segunda iteración, realizamos los siguientes ajustes respecto a nuestra propuesta inicial en la Entrega 1:
+### Iteración E1 → E2
+
+A partir de la retroalimentación obtenida y nuestras discusiones técnicas en la segunda iteración, realizamos los siguientes ajustes respecto a nuestra propuesta inicial en la Entrega 1:
 * **Decisión de Cómputo:** Inicialmente no teníamos claro si nos iríamos por contenedores o funciones Serverless. Tras analizar el comportamiento de las reservas (tráfico intermitente y en ráfagas), decidimos descartar los contenedores (que implican pagos por capacidad continua) y elegimos **AWS Lambda**. Esto nos permite mantener los costos bajos durante la fase MVP.
 * **Definición del Modelo de Datos:** Pasamos de un concepto ambiguo a un modelo concreto basado en **AWS DynamoDB**. Decidimos abandonar la idea de usar bases de datos relacionales tradicionales porque las consultas que nos interesan (disponibilidad por fecha/cancha y reservas por usuario) pueden resolverse muy bien utilizando un esquema de tabla única y Global Secondary Indexes (GSIs). 
 * **Manejo de Archivos:** Nos dimos cuenta de que requeríamos almacenar los comprobantes inmutables generados para los usuarios, por lo que decidimos acoplar un almacenamiento de objetos con **Amazon S3** específicamente para dichos *vouchers*.
+
+### Iteración E2 → E3 (Red)
+
+Con la capa de red cubierta en clase (Semana 5), incorporamos el aislamiento de los componentes ya diseñados. Esta iteración es corta pero define dónde vive cada pieza del sistema:
+* **VPC con CIDR explícito:** Definimos una VPC con rango `10.0.0.0/16` para alojar todos los recursos de SportSpace, con 2 Availability Zones para balance entre disponibilidad y costo en el MVP.
+* **Separación pública/privada:** Creamos subnets públicas (API Gateway, NAT Gateway) y privadas (Lambda en VPC). DynamoDB y S3 no viven dentro de subnets, pero su acceso desde la Lambda se asegura mediante VPC Gateway Endpoints, eliminando la necesidad de tráfico por internet público.
+* **Decisión de conectividad saliente:** Evaluamos NAT Gateway vs VPC Endpoints. Para el MVP elegimos **VPC Endpoints** (Gateway Endpoints para DynamoDB y S3), lo cual elimina el costo fijo de NAT Gateway (~$32/mes por AZ) y mantiene el tráfico dentro del backbone de AWS. Si en el futuro la Lambda necesita acceder a APIs externas (pasarela de pagos, proveedor de notificaciones), se agregará un NAT Gateway.
+* **Primera versión del diagrama de contenedores:** Aparece con la separación pública/privada. Se completará en E4 con queues/topics.
 
 ## 1. Resumen Ejecutivo
 
@@ -380,7 +390,175 @@ Decidimos implementar **AWS DynamoDB** (base de datos NoSQL gestionada) utilizan
 
 ---
 
-## 11. Preguntas Abiertas
+## 11. Diagrama de Contenedores (v1 — Separación Pública/Privada)
+
+El siguiente diagrama muestra los bloques principales del sistema ubicados en sus subnets correspondientes. Esta es la primera versión; se completará en E4 con queues/topics y workers asíncronos.
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                          INTERNET                                 │
+│   Usuario Web/Móvil ──────────► HTTPS                            │
+│   Administrador ──────────────► HTTPS                            │
+└───────────────────────────────────┬──────────────────────────────┘
+                                    │
+┌───────────────────────────────────┴──────────────────────────────┐
+│  Cuenta AWS — us-east-1                                           │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │  VPC — 10.0.0.0/16 · 2 Availability Zones                    │ │
+│  │                                                               │ │
+│  │  ┌─ CAPA PÚBLICA ──────────────────────────────────────────┐ │ │
+│  │  │                                                          │ │ │
+│  │  │  AZ-a (us-east-1a)          AZ-b (us-east-1b)           │ │ │
+│  │  │  ┌──────────────────┐      ┌──────────────────┐        │ │ │
+│  │  │  │ API Gateway       │      │ (API Gateway     │        │ │ │
+│  │  │  │ Servicio regional │      │  es regional)    │        │ │ │
+│  │  │  └────────┬─────────┘      └──────────────────┘        │ │ │
+│  │  │           │                                              │ │ │
+│  │  │           │ integración directa (proxy)                  │ │ │
+│  │  │           ▼                                              │ │ │
+│  │  └──────────────────────────────────────────────────────────┘ │ │
+│  │                                                               │ │
+│  │  ┌─ CAPA PRIVADA (App) ─────────────────────────────────────┐ │ │
+│  │  │                                                          │ │ │
+│  │  │  AZ-a                         AZ-b                       │ │ │
+│  │  │  Subnet 10.0.2.0/24           Subnet 10.0.4.0/24        │ │ │
+│  │  │  ┌──────────────────┐        ┌──────────────────┐      │ │ │
+│  │  │  │ Lambda            │        │ Lambda            │      │ │ │
+│  │  │  │ (API endpoints)   │        │ (API endpoints)   │      │ │ │
+│  │  │  │                   │        │                   │      │ │ │
+│  │  │  │ GET /disponibilidad│       │ GET /disponibilidad│     │ │ │
+│  │  │  │ POST /reservas    │        │ POST /reservas    │      │ │ │
+│  │  │  │ DELETE /reservas  │        │ DELETE /reservas  │      │ │ │
+│  │  │  └───┬──────┬───────┘        └───┬──────┬───────┘      │ │ │
+│  │  │      │      │                    │      │                │ │ │
+│  │  └──────┼──────┼────────────────────┼──────┼────────────────┘ │ │
+│  │         │      │                    │      │                  │ │
+│  │         │      │    ┌───────────────┘      │                  │ │
+│  │         │      │    │         ┌────────────┘                  │ │
+│  │         │      ▼    ▼         ▼                               │ │
+│  │  ┌──────┴──── VPC Endpoints ──┴─────────────────────────────┐ │ │
+│  │  │                                                          │ │ │
+│  │  │  ┌─────────────────────┐   ┌─────────────────────┐      │ │ │
+│  │  │  │ DynamoDB Gateway    │   │ S3 Gateway           │      │ │ │
+│  │  │  │ Endpoint            │   │ Endpoint             │      │ │ │
+│  │  │  │ (com.amazonaws.     │   │ (com.amazonaws.      │      │ │ │
+│  │  │  │  us-east-1.dynamodb)│   │  us-east-1.s3)       │      │ │ │
+│  │  │  └──────────┬──────────┘   └──────────┬──────────┘      │ │ │
+│  │  └─────────────┼─────────────────────────┼─────────────────┘ │ │
+│  │                │                         │                    │ │
+│  └────────────────┼─────────────────────────┼────────────────────┘ │
+│                   │                         │                      │
+│                   ▼                         ▼                      │
+│  ┌────────────────────┐   ┌────────────────────────────┐          │
+│  │ DynamoDB           │   │ S3                          │          │
+│  │ Tabla: reservas     │   │ Bucket: vouchers + reportes │          │
+│  │ GSIs: espacio-fecha │   │ SSE-S3 + versionado        │          │
+│  │        usuario-fecha│   │                             │          │
+│  └────────────────────┘   └────────────────────────────┘          │
+│                                                                    │
+│  ┌──────────────────────────────────────────────────────────────┐ │
+│  │ Servicios externos (vía internet — E4 definirá conectividad) │ │
+│  │ [Pasarela de Pagos]  [Proveedor Notif.]  [Proveedor Ident.]  │ │
+│  └──────────────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Decisiones visibles en el diagrama
+
+| Componente | Capa | Justificación |
+|------------|------|---------------|
+| **API Gateway** | Pública (servicio regional) | Único punto de entrada desde internet. Recibe requests HTTPS del frontend web/móvil. Es un servicio administrado que no reside en subnets de la VPC. |
+| **Lambda** | Privada (app) | Sin exposición directa a internet. Solo recibe tráfico del API Gateway mediante integración proxy. Ubicada en subnets privadas de capa app. |
+| **DynamoDB** | Servicio gestionado | No vive en la VPC. El acceso desde Lambda se da mediante VPC Gateway Endpoint, manteniendo el tráfico en el backbone de AWS sin pasar por internet público. |
+| **S3** | Servicio gestionado | Igual que DynamoDB: acceso privado mediante VPC Gateway Endpoint. Almacena vouchers PDF y reportes de utilización. |
+| **Servicios externos** | Fuera de la VPC | Pasarela de pagos, proveedor de notificaciones e identidad. La conectividad saliente se definirá con detalle en E5 (NAT Gateway si se requiere acceso a internet). |
+
+---
+
+## 12. Diseño de Red
+
+### 14.1 VPC y CIDR
+
+Definimos una **VPC con CIDR `10.0.0.0/16`** para alojar todos los recursos de SportSpace. Este rango proporciona 65,536 direcciones IP privadas, espacio más que suficiente para el MVP y para crecimiento futuro (múltiples ambientes dev/staging/prod dentro del mismo rango usando sub-rangos).
+
+Justificación del tamaño:
+- `/16` es el rango máximo recomendado por AWS para una VPC. No hay penalización de costo por usar un rango grande.
+- Un rango más pequeño (ej. `/20` con 4,096 IPs) sería suficiente para el MVP, pero `/16` nos da flexibilidad para separar ambientes sin re-diseñar la VPC.
+- Permite subnetting claro: ambiente dev en `10.0.0.0/18`, staging en `10.0.64.0/18`, prod en `10.0.128.0/18`.
+
+### 14.2 Subnets y Availability Zones
+
+Elegimos **2 Availability Zones** (us-east-1a, us-east-1b) para el MVP.
+
+| Subnet | CIDR | AZ | Capa | Propósito |
+|--------|------|----|----|-----------|
+| `public-a` | `10.0.1.0/24` | us-east-1a | Pública | NAT Gateway |
+| `public-b` | `10.0.3.0/24` | us-east-1b | Pública | NAT Gateway |
+| `private-app-a` | `10.0.2.0/24` | us-east-1a | Privada (app) | Lambda en VPC |
+| `private-app-b` | `10.0.4.0/24` | us-east-1b | Privada (app) | Lambda en VPC |
+
+**Trade-off — 2 AZs vs 3 AZs:**
+
+| Criterio | 2 AZs (elegido) | 3 AZs |
+|----------|-----------------|-------|
+| **Disponibilidad** | Soporta caída de 1 AZ completa. Servicio sigue funcionando en la otra. | Soporta caída de 2 AZs simultáneas (escenario extremadamente raro). |
+| **Costo** | Sin NAT Gateway. VPC Endpoints son gratuitos. | Si se usara NAT Gateway: $32/AZ/mes × 3 = $96/mes solo en NAT. |
+| **Complejidad** | Menor: 4 subnets totales. | Mayor: 6 subnets, más reglas de ruteo. |
+| **Justificación MVP** | Para ~50 reservas/día, 2 AZs ofrecen alta disponibilidad suficiente. Una tercera AZ no mejora la experiencia del usuario final en este volumen. | Se reconsiderará si el sistema escala a cientos de reservas/día o si se agrega un SLA contractual. |
+
+### 14.3 Conectividad Saliente — NAT Gateway vs VPC Endpoints
+
+Los recursos en subnets privadas (Lambda) necesitan acceder a DynamoDB y S3. Hay dos mecanismos para darles conectividad:
+
+| Mecanismo | Cómo funciona | Costo mensual (MVP) |
+|-----------|---------------|---------------------|
+| **NAT Gateway** | Traduce IPs privadas a IPs públicas. El tráfico sale a internet y llega a DynamoDB/S3 por sus endpoints públicos. | ~$32/AZ/mes (hourly) + $0.045/GB procesado |
+| **VPC Gateway Endpoint** (elegido) | Ruta privada directa dentro del backbone de AWS. El tráfico nunca sale a internet. | **$0** (sin costo por hora ni por GB) |
+
+**Decisión: VPC Gateway Endpoints para DynamoDB y S3.**
+
+Justificación:
+- DynamoDB y S3 son los **únicos** servicios AWS que la Lambda de SportSpace necesita acceder. Ambos soportan Gateway Endpoints (gratuitos).
+- Un NAT Gateway añadiría ~$64/mes (2 AZs × $32) solo por estar encendido, sin contar el tráfico. Para un MVP con ~50 reservas/día, este costo no se justifica.
+- El tráfico por VPC Endpoint nunca abandona la red de AWS, lo cual **mejora la seguridad** (no pasa por internet público) y **reduce latencia** (sin saltos额外).
+- Los VPC Endpoints se resuelven a nivel de tabla de ruteo: una vez configurados, la Lambda accede a DynamoDB y S3 usando los mismos SDKs, sin cambios de código.
+
+**Desventaja reconocida:** Si en el futuro la Lambda necesita acceder a servicios externos (pasarela de pagos, proveedor de notificaciones vía HTTP), necesitaremos agregar un NAT Gateway. Esta decisión se reevaluará en E4/E5 cuando definamos los flujos asíncronos y la integración con servicios de terceros.
+
+### 14.4 Tablas de Ruteo
+
+| Route Table | Asociada a | Rutas |
+|-------------|-----------|-------|
+| `rt-public` | Subnets públicas (`public-a`, `public-b`) | `0.0.0.0/0` → Internet Gateway; `10.0.0.0/16` → local |
+| `rt-private-app` | Subnets privadas de app (`private-app-a`, `private-app-b`) | `10.0.0.0/16` → local; DynamoDB → VPC Endpoint; S3 → VPC Endpoint |
+
+### 14.5 Security Groups (versión inicial)
+
+Definimos Security Groups por capa con reglas explícitas. La seguridad detallada (IAM, KMS, Secrets Manager) corresponde a E5.
+
+| Security Group | Capa | Reglas de entrada |
+|----------------|------|-------------------|
+| **SG-Lambda** | App | Tráfico solo desde API Gateway (gestionado por el servicio, no requiere regla explícita de SG). Dentro de la VPC, acceso entre Lambdas en el mismo SG. |
+| **SG-VPCEndpoints** | Endpoints | Tráfico HTTPS (443) desde `SG-Lambda` hacia los VPC Endpoints de DynamoDB y S3. |
+
+**Flujo de tráfico end-to-end:**
+```
+Usuario → HTTPS (internet) → API Gateway → Lambda (SG-Lambda, subnets privadas)
+                                                  │
+                                    ┌─────────────┼─────────────┐
+                                    ▼                           ▼
+                          DynamoDB Gateway EP          S3 Gateway EP
+                          (SG-VPCEndpoints)           (SG-VPCEndpoints)
+                                    │                           │
+                                    ▼                           ▼
+                              DynamoDB                      S3
+                          (tabla reservas)          (bucket vouchers)
+```
+
+---
+
+## 13. Preguntas Abiertas
 
 Las siguientes preguntas permanecen abiertas. Se espera que se resuelvan en entregas posteriores conforme se cubran los temas técnicos correspondientes.
 
@@ -391,23 +569,32 @@ Las siguientes preguntas permanecen abiertas. Se espera que se resuelvan en entr
 
 ### 11.2 Preguntas Técnicas
 
-- **[E3 — Red]:** Número de Availability Zones y si se justifica alta disponibilidad para el MVP. ¿Cómo estructuraremos la VPC interconectando la API Gateway con Lambda y Dynamo de forma segura?
-- **[E4 — Asíncrono]:** Mecanismo exacto para la respuesta del proveedor notificaciones y el workflow de pago sin encolar la API Gateway (EventBridge vs SQS).
+- **[E3 — Red]:** ~~Número de Availability Zones y si se justifica alta disponibilidad para el MVP. ¿Cómo estructuraremos la VPC interconectando la API Gateway con Lambda y Dynamo de forma segura?~~ **Resuelto en esta entrega.** Se definió VPC con CIDR `10.0.0.0/16`, 2 AZs, subnets públicas/privadas, y VPC Gateway Endpoints para DynamoDB y S3. La conectividad saliente a internet queda pendiente para E4/E5.
+- **[E3 — Red (nueva)]:** ¿Conviene mantener la Lambda fuera de la VPC para evitar el cold start adicional por ENI (Elastic Network Interface)? Dejarla fuera simplificaría el diseño de red pero perderíamos el aislamiento de capa privada. Se resolverá en E5 cuando evaluemos el impacto real del cold start con métricas.
+- **[E4 — Asíncrono]:** Mecanismo exacto para la respuesta del proveedor notificaciones y el workflow de pago sin encolar la API Gateway (EventBridge vs SQS). ¿Cómo afecta la decisión de VPC Endpoints (sin NAT Gateway) a la capacidad de la Lambda para invocar servicios externos como SES o SNS?
 - **[E5 — Seguridad]:** Estrategia de autenticación: ¿JWT validado en API Gateway o directo en el servicio? ¿Integración con Cognito o Auth0?
 - **[E5 — Costos]:** Estimado de costo mensual para un complejo mediano (~50 reservas/día). Pendiente de calculadora de proveedor.
 
 ---
 
-## 12. Anexo IA — Uso de Inteligencia Artificial
+## 14. Anexo IA — Uso de Inteligencia Artificial
 
 Este anexo documenta el uso de herramientas de IA durante la elaboración del proyecto, conforme a la política del curso.
 
-### 12.1 E2 (Cómputo y Datos)
-- **Analizar Trade-offs:** Utilizamos la IA para validar nuestras hipótesis sobre ECS Fargate frente a Lambda. Le planteamos nuestro escenario de tráfico en ráfagas para el MVP, y utilizamos su análisis para confirmar las ventajas del esquema de facturación "pago por uso" del Free Tier de Lambda frente a la carga continua de un contenedor inactivo.
-- **Diseño del Modelo NoSQL:** Le pedimos a la IA evaluar nuestro planteamiento para modelar un dominio tradicionalmente relacional usando Single Table Design. La IA nos ayudó a confirmar la pertinencia técnica de los GSIs (`espacio-fecha-index` y `usuario-fecha-index`), dándonos seguridad de que con DynamoDB eliminaríamos cuellos de botella por JOINs para nuestros patrones principales (disponibilidad y listado de historial).
+### 14.1 E1 (Scope y Mockups)
 
-### 12.2 E1 (Scope y Mockups)
 - **Qué le pedimos a la IA (Claude, Sonnet 4.6):** Proponer casos de uso priorizados, sugerir criterios de éxito, generar mockups y redactar el scope.
 - **Qué aceptamos sin cambios:** Mockups como punto de visual funcional y la mayoría de preguntas de contexto futuro.
 - **Qué editamos:** Redujimos historias de 10 a 7, e incorporamos el "bloqueo optimista" de 15 minutos en la reserva en vez del valor mínimo propuesto.
 - **Qué descartamos:** Sistema de reseñas de canchas (fuera de scope), mapa con Google Maps (evitando dependencias prescindibles) y descartamos la arquitectura por microservicios en favor de una monolítica Serverless controlada.
+
+### 14.2 E2 (Cómputo y Datos)
+
+- **Analizar Trade-offs:** Utilizamos la IA para validar nuestras hipótesis sobre ECS Fargate frente a Lambda. Le planteamos nuestro escenario de tráfico en ráfagas para el MVP, y utilizamos su análisis para confirmar las ventajas del esquema de facturación "pago por uso" del Free Tier de Lambda frente a la carga continua de un contenedor inactivo.
+- **Diseño del Modelo NoSQL:** Le pedimos a la IA evaluar nuestro planteamiento para modelar un dominio tradicionalmente relacional usando Single Table Design. La IA nos ayudó a confirmar la pertinencia técnica de los GSIs (`espacio-fecha-index` y `usuario-fecha-index`), dándonos seguridad de que con DynamoDB eliminaríamos cuellos de botella por JOINs para nuestros patrones principales (disponibilidad y listado de historial).
+
+### 14.3 E3 — Red
+
+- **Diseño de la VPC y subnetting:** Le pedimos a la IA que validara nuestra propuesta de CIDR `10.0.0.0/16` y la distribución de subnets en 2 AZs. La IA confirmó que el diseño era correcto para un MVP serverless y sugirió alternativas de subnetting más granular (separar capa de datos en subnets propias) que consideramos innecesarias para DynamoDB por ser un servicio gestionado fuera de la VPC.
+- **Trade-off NAT Gateway vs VPC Endpoints:** Le pedimos comparar ambos mecanismos para nuestro caso específico (Lambda → DynamoDB + S3). La IA nos ayudó a cuantificar el costo mensual de NAT Gateway (~$64/mes para 2 AZs) y confirmó que VPC Gateway Endpoints cubren nuestro caso de uso a costo cero, lo cual reforzó nuestra decisión.
+- **Qué descartamos:** La IA sugirió usar AWS PrivateLink (Interface Endpoints) en vez de Gateway Endpoints argumentando mayor flexibilidad. Lo descartamos porque los Gateway Endpoints son gratuitos y suficientes para DynamoDB y S3; Interface Endpoints tienen costo por hora (~$7.20/mes por endpoint) y no ofrecen beneficio adicional para nuestro patrón de acceso.
