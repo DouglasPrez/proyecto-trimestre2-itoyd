@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { CheckCircle, Calendar, XCircle } from 'lucide-react'
+import { CheckCircle, Calendar, XCircle, Download } from 'lucide-react'
 import api from '../api/client'
 import type { Reservation } from '../api/client'
 
@@ -10,12 +10,26 @@ export default function VoucherPage() {
   const { reservationId } = useParams<{ reservationId: string }>()
   const [reservation, setReservation] = useState<Reservation | null>(null)
   const [loading, setLoading] = useState(true)
+  const [downloading, setDownloading] = useState(false)
 
   useEffect(() => {
     api.get<Reservation>(`/reservations/${reservationId}`).then(({ data }) => {
       setReservation(data)
     }).finally(() => setLoading(false))
   }, [reservationId])
+
+  async function handleDownloadVoucher() {
+    if (!reservationId) return
+    setDownloading(true)
+    try {
+      const { data } = await api.get<{ voucher_url: string }>(`/reservations/${reservationId}/voucher`)
+      window.open(data.voucher_url, '_blank', 'noopener,noreferrer')
+    } catch {
+      alert('Comprobante no disponible aún. Intenta en unos segundos.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   if (loading) return <div className="card text-center py-12 text-gray-500">Cargando...</div>
   if (!reservation) return <div className="card text-center py-12 text-red-500">Reserva no encontrada</div>
@@ -71,6 +85,15 @@ export default function VoucherPage() {
         {reservation.user?.email && (
           <p className="text-xs text-gray-500">Confirmación enviada a: {reservation.user.email}</p>
         )}
+
+        <button
+          onClick={handleDownloadVoucher}
+          disabled={downloading}
+          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors"
+        >
+          <Download size={16} />
+          {downloading ? 'Obteniendo enlace...' : 'Descargar comprobante'}
+        </button>
 
         <div className="flex gap-3">
           <Link to="/reservations" className="btn-secondary flex-1 flex items-center justify-center gap-2">

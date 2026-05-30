@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import List
@@ -6,6 +7,8 @@ from typing import List
 from ..database import get_db
 from .. import models, schemas
 from ..auth import get_current_user
+from ..aws.s3 import upload_voucher, get_voucher_presigned_url
+from ..aws.voucher import build_voucher_html
 
 router = APIRouter(prefix="/reservations", tags=["reservations"])
 
@@ -160,6 +163,20 @@ def confirm_reservation(
     reservation.expires_at = None
     db.commit()
     db.refresh(reservation)
+
+    html = build_voucher_html(
+        reservation_code=reservation.reservation_code,
+        space_name=space.name,
+        complex_name=space.complex.name,
+        sport_type=space.sport_type,
+        start_time=reservation.start_time,
+        end_time=reservation.end_time,
+        amount_paid=amount,
+        payment_last4=body.payment_method_last4,
+        user_email=current_user.email,
+    )
+    upload_voucher(reservation.reservation_code, html)
+
     return reservation
 
 
@@ -189,3 +206,28 @@ def cancel_reservation(
     db.commit()
     db.refresh(reservation)
     return reservation
+
+
+@router.get("/{reservation_id}/voucher")
+def get_voucher(
+    reservation_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    reservation = db.query(models.Reservation).filter(
+        models.Reservation.id == reservation_id
+    ).first()
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reserva no encontrada")
+    if reservation.user_id != current_user.id and current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Sin permiso")
+    if reservation.status != models.ReservationStatus.CONFIRMED:
+        raise HTTPException(status_code=400, detail="El comprobante solo está disponible para reservas confirmadas")
+    if not reservation.reservation_code:
+        raise HTTPException(status_code=404, detail="Código de reserva no disponible")
+
+    url = get_voucher_presigned_url(reservation.reservation_code)
+    if not url:
+        raise HTTPException(status_code=404, detail="Comprobante no disponible (S3 no configurado o no encontrado)")
+
+    return JSONResponse({"voucher_url": url})
