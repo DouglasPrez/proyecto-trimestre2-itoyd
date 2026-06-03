@@ -1,22 +1,14 @@
 # ---------------------------------------------------------------------------
-# Archivo ZIP de placeholder para que Terraform pueda crear la función.
-# En un proyecto real este archivo sería reemplazado por el código real
-# de la API de SportSpace empaquetado por el pipeline de CI/CD.
+# Empaqueta src/index.py como el handler real de Delivery 3
 # ---------------------------------------------------------------------------
-data "archive_file" "placeholder" {
+data "archive_file" "handler" {
   type        = "zip"
-  output_path = "${path.module}/placeholder.zip"
-
-  source {
-    content  = "def handler(event, context):\n    return {'statusCode': 200, 'body': 'SportSpace API'}\n"
-    filename = "index.py"
-  }
+  output_path = "${path.module}/handler.zip"
+  source_file = "${path.root}/../src/index.py"
 }
 
 # ---------------------------------------------------------------------------
-# IAM Role — execution role de la Lambda
-# Permisos mínimos: solo lo necesario para que Lambda pueda ejecutarse
-# y escribir logs en CloudWatch. Sin wildcards en Action ni Resource.
+# IAM Role
 # ---------------------------------------------------------------------------
 resource "aws_iam_role" "lambda_exec" {
   name = "${var.project_name}-${var.environment}-${var.name}-exec-role"
@@ -38,7 +30,7 @@ resource "aws_iam_role" "lambda_exec" {
   }
 }
 
-# Política inline con permisos mínimos para CloudWatch Logs
+# CloudWatch Logs — scoped al log group de esta función
 resource "aws_iam_role_policy" "lambda_logs" {
   name = "${var.project_name}-${var.environment}-${var.name}-logs-policy"
   role = aws_iam_role.lambda_exec.id
@@ -59,6 +51,56 @@ resource "aws_iam_role_policy" "lambda_logs" {
   })
 }
 
+# D3 — DynamoDB: scoped al ARN de la tabla específica (sin wildcard)
+resource "aws_iam_role_policy" "lambda_dynamodb" {
+  name = "${var.project_name}-${var.environment}-${var.name}-dynamodb-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DynamoDBTableAccess"
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Scan",
+          "dynamodb:Query"
+        ]
+        Resource = [
+          var.dynamodb_table_arn,
+          "${var.dynamodb_table_arn}/index/*"
+        ]
+      }
+    ]
+  })
+}
+
+# D3 — S3: scoped al ARN del bucket específico (sin wildcard)
+resource "aws_iam_role_policy" "lambda_s3" {
+  name = "${var.project_name}-${var.environment}-${var.name}-s3-policy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "S3BucketAccess"
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${var.s3_bucket_arn}/*"
+      }
+    ]
+  })
+}
+
 # ---------------------------------------------------------------------------
 # Lambda Function
 # ---------------------------------------------------------------------------
@@ -66,8 +108,8 @@ resource "aws_lambda_function" "this" {
   function_name = "${var.project_name}-${var.environment}-${var.name}"
   role          = aws_iam_role.lambda_exec.arn
 
-  filename         = data.archive_file.placeholder.output_path
-  source_code_hash = data.archive_file.placeholder.output_base64sha256
+  filename         = data.archive_file.handler.output_path
+  source_code_hash = data.archive_file.handler.output_base64sha256
 
   runtime     = var.runtime
   handler     = var.handler
@@ -76,8 +118,10 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      ENVIRONMENT  = var.environment
-      PROJECT_NAME = var.project_name
+      ENVIRONMENT    = var.environment
+      PROJECT_NAME   = var.project_name
+      DYNAMODB_TABLE = var.dynamodb_table_name
+      S3_BUCKET      = var.s3_bucket_name
     }
   }
 
@@ -87,5 +131,3 @@ resource "aws_lambda_function" "this" {
     Name        = "${var.project_name}-${var.environment}-${var.name}"
   }
 }
-
-
