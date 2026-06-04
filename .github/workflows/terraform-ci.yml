@@ -42,9 +42,10 @@ jobs:
       - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="bucket=proyecto-trimestre2-itoyd-tfstate" \
+            -backend-config="bucket=proyecto-trimestre2-v2-tfstate" \
             -backend-config="key=infra/terraform.tfstate" \
-            -backend-config="region=${{ secrets.AWS_REGION }}"
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=proyecto-trimestre2-v2-tflock"
 
       - name: Terraform Validate
         run: terraform validate
@@ -108,9 +109,10 @@ jobs:
       - name: Terraform Init
         run: |
           terraform init \
-            -backend-config="bucket=proyecto-trimestre2-itoyd-tfstate" \
+            -backend-config="bucket=proyecto-trimestre2-v2-tfstate" \
             -backend-config="key=infra/terraform.tfstate" \
-            -backend-config="region=${{ secrets.AWS_REGION }}"
+            -backend-config="region=${{ secrets.AWS_REGION }}" \
+            -backend-config="dynamodb_table=proyecto-trimestre2-v2-tflock"
 
       - name: Terraform Apply
         run: |

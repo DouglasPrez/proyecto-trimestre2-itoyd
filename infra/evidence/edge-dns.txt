@@ -1,0 +1,10 @@
+System.Object[]
+
+--- A Record ---
+System.Object[]
+
+--- curl custom domain ---
+System.Object[]
+
+--- terraform output ---
+System.Object[]

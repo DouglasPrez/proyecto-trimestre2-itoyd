@@ -1,0 +1,40 @@
+* Host dpx91ti4dc.execute-api.us-east-1.amazonaws.com:443 was resolved.
+* IPv6: (none)
+* IPv4: 100.27.180.161, 54.81.75.23
+*   Trying 100.27.180.161:443...
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* ALPN: server accepted http/1.1
+* Established connection to dpx91ti4dc.execute-api.us-east-1.amazonaws.com (100.27.180.161 port 443) from 192.168.0.28 port 59011 
+* using HTTP/1.x
+> GET /dev/ HTTP/1.1
+System.Management.Automation.RemoteException
+> Host: dpx91ti4dc.execute-api.us-east-1.amazonaws.com
+System.Management.Automation.RemoteException
+> User-Agent: curl/8.19.0
+System.Management.Automation.RemoteException
+> Accept: */*
+System.Management.Automation.RemoteException
+> 
+System.Management.Automation.RemoteException
+* Request completely sent off
+* schannel: remote party requests renegotiation
+* schannel: renegotiating SSL/TLS connection
+* schannel: SSL/TLS connection renegotiated
+< HTTP/1.1 200 OK
+System.Management.Automation.RemoteException
+< Date: Thu, 04 Jun 2026 01:33:10 GMT
+System.Management.Automation.RemoteException
+< Content-Type: application/json
+System.Management.Automation.RemoteException
+< Content-Length: 45
+System.Management.Automation.RemoteException
+< Connection: keep-alive
+System.Management.Automation.RemoteException
+< Apigw-Requestid: eaZZhg9hIAMEJ-w=
+System.Management.Automation.RemoteException
+< 
+System.Management.Automation.RemoteException
+{ [45 bytes data]
+* Connection #0 to host dpx91ti4dc.execute-api.us-east-1.amazonaws.com:443 left intact
+{"status": "ok", "service": "sportspace-api"}

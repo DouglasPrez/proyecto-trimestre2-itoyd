@@ -22,8 +22,8 @@ Ambos servicios son completamente serverless: no viven en una VPC, no tienen ENI
 
 El track serverless-only substituye la VPC por un **Edge & DNS deliverable**: dominio personalizado, hosted zone en Route 53, certificado ACM, validación DNS y custom domain en API Gateway.
 
-**Dominio:** `api.sportspace.example.com`
-*(Sustituir con el subdominio real provisto por los instructores o el dominio del equipo antes de hacer apply. El dominio fue [fuente: sub-delegado por instructores / registrado por el equipo — actualizar esta línea].)*
+**Dominio:** `grupo2.oyd.solid.com.gt`
+*(Sub-delegado por los instructores. Hosted zone ID: Z0165481J6MHDXNP4MB4. NS: ns-1941.awsdns-50.co.uk, ns-610.awsdns-12.net, ns-1154.awsdns-16.org, ns-222.awsdns-27.com.)*
 
 ---
 
@@ -76,14 +76,14 @@ DynamoDB y S3 son servicios gestionados fuera de VPC — no tenían placeholder 
 ```
 terraform output
 
-api_custom_endpoint         = "https://api.sportspace.example.com"
-api_gateway_endpoint        = "https://XXXXX.execute-api.us-east-1.amazonaws.com/dev"
-api_gateway_id              = "XXXXX"
-database_table_arn          = "arn:aws:dynamodb:us-east-1:676206925447:table/proyecto-trimestre2-itoyd-dev-reservas"
-database_table_name         = "proyecto-trimestre2-itoyd-dev-reservas"
-hosted_zone_id              = "ZXXXXXXXXXXXX"
-lambda_function_arn         = "arn:aws:lambda:us-east-1:676206925447:function:proyecto-trimestre2-itoyd-dev-api"
-storage_bucket_name         = "proyecto-trimestre2-itoyd-dev-storage"
+api_custom_endpoint         = "https://grupo2.oyd.solid.com.gt"
+api_gateway_endpoint        = "https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev"
+api_gateway_id              = "dpx91ti4dc"
+database_table_arn          = "arn:aws:dynamodb:us-east-1:705061159333:table/proyecto-trimestre2-dev-reservas"
+database_table_name         = "proyecto-trimestre2-dev-reservas"
+hosted_zone_id              = "Z0165481J6MHDXNP4MB4"
+lambda_function_arn         = "arn:aws:lambda:us-east-1:705061159333:function:proyecto-trimestre2-dev-api"
+storage_bucket_name         = "proyecto-trimestre2-dev-storage"
 ```
 *(Actualizar con los valores reales después del apply)*
 
@@ -129,7 +129,7 @@ Para DynamoDB el acceso es completamente basado en IAM: no hay credenciales, no 
 | DynamoDB GSI access | `arn:aws:dynamodb:us-east-1:676206925447:table/proyecto-trimestre2-itoyd-dev-reservas/index/*` |
 | S3 PutObject/GetObject | `arn:aws:s3:::proyecto-trimestre2-itoyd-dev-storage/*` |
 
-*(Actualizar account ID con el valor real)*
+*(Actualizar account ID con el valor real)*\n\nAccount ID: `705061159333`
 
 ### Seed data
 El ítem de seed se inserta vía `aws_dynamodb_table_item` en `infra/seed/seed.tf`, llamado como `module.seed` desde el root module. Esto garantiza que el ítem sea reproducible, revisable por los graders, y no requiera intervención manual en la consola. El seed crea una reserva confirmada con `reserva_id = "SEED-001"` en la tabla.

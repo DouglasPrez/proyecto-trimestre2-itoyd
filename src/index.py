@@ -31,19 +31,17 @@ def _response(status_code: int, body: dict) -> dict:
 
 
 def handler(event: dict, context) -> dict:
-    http   = event.get("requestContext", {}).get("http", {})
-    method = http.get("method", "")
-    path   = http.get("path", "")
+    route_key = event.get("routeKey", "")
 
     # GET /reservations — lee de DynamoDB
-    if method == "GET" and path == "/reservations":
+    if route_key == "GET /reservations":
         table  = dynamodb.Table(TABLE_NAME)
         result = table.scan(Limit=20)
         items  = result.get("Items", [])
         return _response(200, {"reservations": items, "count": len(items)})
 
     # POST /vouchers — escribe en S3
-    if method == "POST" and path == "/vouchers":
+    if route_key == "POST /vouchers":
         raw_body = event.get("body") or "{}"
         try:
             payload = json.loads(raw_body)
@@ -62,8 +60,8 @@ def handler(event: dict, context) -> dict:
         return _response(201, {"object_key": object_key, "bucket": BUCKET_NAME})
 
     # GET / — health check
-    if method == "GET" and path == "/":
+    if route_key == "GET /":
         return _response(200, {"status": "ok", "service": "sportspace-api"})
 
-    return _response(404, {"error": f"Route not found: {method} {path}"})
+    return _response(404, {"error": f"Route not found: {route_key}"})
     
