@@ -184,3 +184,68 @@ Esto garantiza una autenticación segura sin exponer credenciales en el reposito
 ### Remote State — Lock contention demostrado
 
 ![State Lock Contention](evidence/state-lock-contention.png)
+
+---
+
+## Evidence — Delivery 3
+
+### Deliverable A — Edge & DNS (serverless-only)
+
+**DNS Resolution** — Ver `infra/evidence/edge-dns.txt`
+
+**terraform output**
+```
+api_custom_endpoint         = "https://grupo2.oyd.solid.com.gt"
+api_gateway_endpoint        = "https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev"
+hosted_zone_id              = "Z0165481J6MHDXNP4MB4"
+hosted_zone_name_servers    = ["ns-1154.awsdns-16.org", "ns-1941.awsdns-50.co.uk",
+                               "ns-222.awsdns-27.com", "ns-610.awsdns-12.net"]
+```
+
+### Deliverable B — Network Security (least-privilege invoker IAM)
+
+**Lambda Permission Policy** — Ver `infra/evidence/invoker-iam-policy.txt`
+```json
+{
+    "Sid": "AllowAPIGatewayInvoke",
+    "Effect": "Allow",
+    "Principal": {"Service": "apigateway.amazonaws.com"},
+    "Action": "lambda:InvokeFunction",
+    "Resource": "arn:aws:lambda:us-east-1:705061159333:function:proyecto-trimestre2-dev-api",
+    "Condition": {
+        "ArnLike": {
+            "AWS:SourceArn": "arn:aws:execute-api:us-east-1:705061159333:dpx91ti4dc/*/*"
+        }
+    }
+}
+```
+
+### Deliverable C — Public Ingress Layer
+
+**API Gateway health check** — Ver `infra/evidence/ingress-curl.txt`
+```
+curl -v https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev/
+→ 200 OK  {"status": "ok", "service": "sportspace-api"}
+```
+
+**Screenshot** — `infra/evidence/ingress-healthy.png` (tomar de consola AWS → API Gateway → Integrations)
+
+### Deliverable D — End-to-End Connectivity Proof
+
+**GET /reservations** — Ver `infra/evidence/e2e-get.txt`
+```
+curl -v https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev/reservations
+→ 200 OK  {"reservations": [{"reserva_id": "SEED-001", ...}], "count": 1}
+```
+
+**POST /vouchers** — Ver `infra/evidence/e2e-post.txt`
+```
+curl -v -X POST -d '{"test":"delivery3-e2e"}' https://dpx91ti4dc.../dev/vouchers
+→ 201 Created  {"object_key": "vouchers/20260604T013310Z.json", "bucket": "proyecto-trimestre2-dev-storage"}
+```
+
+**Screenshot S3** — `infra/evidence/e2e-storage.png` (tomar de consola AWS → S3 → proyecto-trimestre2-dev-storage → vouchers/)
+
+### Deliverable E — CI Pipeline Integration
+
+**GitHub Actions plan** — `infra/evidence/ci-plan.png` (tomar screenshot del workflow run)
