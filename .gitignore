@@ -57,3 +57,4 @@ App/backend/venv/
 App/backend/.env
 App/backend/*.db
 App/backend/*.sqlite
+App/backend/dist/

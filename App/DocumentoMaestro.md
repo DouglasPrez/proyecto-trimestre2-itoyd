@@ -1,11 +1,34 @@
-## Infraestructura en la Nube
-
 # SportSpace
-### Sistema de Reservas y Disponibilidad de Canchas Deportivas y Espacios Recreativos
+## Sistema de Reservas y Disponibilidad de Canchas Deportivas y Espacios Recreativos
 
-| | |
-|---|---|
+**Curso:** Infraestructura en la Nube
+
 | **Integrantes** | Douglas Perez · Carlos Daniel Martinez · Ana Isabel Perez |
+|---|---|
+
+---
+
+## Tabla de Contenidos
+
+| # | Sección |
+|---|---------|
+| 0 | [Resumen de Cambios por Entrega](#0-resumen-de-cambios) |
+| 1 | [Resumen Ejecutivo](#1-resumen-ejecutivo) |
+| 2 | [Actores](#2-actores) |
+| 3 | [Casos de Uso Priorizados](#3-casos-de-uso-priorizados) |
+| 4 | [Funcionalidades Específicas](#4-funcionalidades-específicas-del-proyecto) |
+| 5 | [Mockups](#5-mockups) |
+| 6 | [Mapeo a Conceptos del Curso](#6-mapeo-a-conceptos-del-curso) |
+| 7 | [Scope del Sistema](#7-scope-del-sistema) |
+| 8 | [Diagrama de Contexto](#8-diagrama-de-contexto) |
+| 9 | [Decisión de Cómputo](#9-decisión-de-cómputo) |
+| 10 | [Modelo de Datos y Almacenamiento](#10-modelo-de-datos-y-almacenamiento) |
+| 11 | [Diagrama de Contenedores v1 — E3](#11-diagrama-de-contenedores-v1--track-serverless-only) |
+| 12 | [Diagrama de Contenedores v2 — E4](#12-diagrama-de-contenedores-v2--e4) |
+| 13 | [Flujos Asíncronos — E4](#13-flujos-asíncronos-e4) |
+| 14 | [Diseño de Red — Track Serverless-Only](#14-diseño-de-red--track-serverless-only) |
+| 15 | [Preguntas Abiertas](#15-preguntas-abiertas) |
+| 16 | [Anexo IA](#16-anexo-ia--uso-de-inteligencia-artificial) |
 
 ---
 
@@ -18,13 +41,24 @@ A partir de la retroalimentación obtenida y nuestras discusiones técnicas en l
 * **Definición del Modelo de Datos:** Pasamos de un concepto ambiguo a un modelo concreto basado en **AWS DynamoDB**. Decidimos abandonar la idea de usar bases de datos relacionales tradicionales porque las consultas que nos interesan (disponibilidad por fecha/cancha y reservas por usuario) pueden resolverse muy bien utilizando un esquema de tabla única y Global Secondary Indexes (GSIs). 
 * **Manejo de Archivos:** Nos dimos cuenta de que requeríamos almacenar los comprobantes inmutables generados para los usuarios, por lo que decidimos acoplar un almacenamiento de objetos con **Amazon S3** específicamente para dichos *vouchers*.
 
-### Iteración E2 → E3 (Red)
+### Iteración E2 → E3 (Red — Track Serverless-Only)
 
-Con la capa de red cubierta en clase (Semana 5), incorporamos el aislamiento de los componentes ya diseñados. Esta iteración es corta pero define dónde vive cada pieza del sistema:
-* **VPC con CIDR explícito:** Definimos una VPC con rango `10.0.0.0/16` para alojar todos los recursos de SportSpace, con 2 Availability Zones para balance entre disponibilidad y costo en el MVP.
-* **Separación pública/privada:** Creamos subnets públicas (API Gateway, NAT Gateway) y privadas (Lambda en VPC). DynamoDB y S3 no viven dentro de subnets, pero su acceso desde la Lambda se asegura mediante VPC Gateway Endpoints, eliminando la necesidad de tráfico por internet público.
-* **Decisión de conectividad saliente:** Evaluamos NAT Gateway vs VPC Endpoints. Para el MVP elegimos **VPC Endpoints** (Gateway Endpoints para DynamoDB y S3), lo cual elimina el costo fijo de NAT Gateway (~$32/mes por AZ) y mantiene el tráfico dentro del backbone de AWS. Si en el futuro la Lambda necesita acceder a APIs externas (pasarela de pagos, proveedor de notificaciones), se agregará un NAT Gateway.
-* **Primera versión del diagrama de contenedores:** Aparece con la separación pública/privada. Se completará en E4 con queues/topics.
+El equipo califica para el **track serverless-only**: cómputo en AWS Lambda y datos en DynamoDB, ambos servicios gestionados fuera de VPC. Por eso la entrega de red no incluye VPC ni subnets; en su lugar, el deliverable equivalente es la capa de **Edge & DNS**:
+* **Track serverless-only confirmado:** Lambda y DynamoDB no requieren VPC, ENIs ni subnets. No se creó una VPC para SportSpace; la arquitectura es completamente serverless y sin configuración de red privada.
+* **Dominio personalizado:** Se configura `grupo2.oyd.solid.com.gt` como endpoint estable de la API, sub-delegado por los instructores. La hosted zone vive en Route 53 (`Z0165481J6MHDXNP4MB4`).
+* **TLS automático con ACM:** Certificado regional (`us-east-1`) con `validation_method = "DNS"`. Los registros CNAME de validación se crean en Route 53 vía Terraform; el record `A ALIAS` apunta al custom domain del API Gateway.
+* **Custom domain en API Gateway:** El stage `dev` del HTTP API se bindea a `grupo2.oyd.solid.com.gt` vía `aws_apigatewayv2_api_mapping`. La URL default del API GW (`dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev`) permanece activa como fallback.
+* **IAM least-privilege para invocación (Deliverable B):** El `aws_lambda_permission` usa `source_arn = "${execution_arn}/*/*"` — scoped al API Gateway específico de SportSpace. Esto previene que cualquier otro origen invoque la Lambda directamente.
+* **Primera versión del diagrama de contenedores:** Muestra el flujo serverless completo: Internet → Route 53 → API Gateway → Lambda → DynamoDB / S3. Sin subnets ni VPC. Se completará en E4 con queues/topics.
+
+### Iteración E3 → E4 (Procesamiento Asíncrono)
+
+Con el diseño de red establecido en E3, en esta iteración incorporamos la capa de procesamiento asíncrono sobre la infraestructura ya definida:
+* **Capa asíncrona sobre el diseño de red:** Se agrega la capa asíncrona sin modificar la capa Edge & DNS definida en E3. Las colas SQS y los workers Lambda son servicios gestionados; al estar en el track serverless-only no requieren configuración de red adicional.
+* **Diagrama de contenedores actualizado:** El diagrama v2 incluye las colas SQS (`notifications-queue` y `expiry-queue`) y sus workers Lambda que se suman a la arquitectura existente API Gateway → Lambda API → DynamoDB/S3.
+* **Pregunta abierta de E3 resuelta:** Se responde la pregunta sobre EventBridge vs SQS. Se eligió SQS por ser la opción más simple para el patrón de un único consumidor por evento, con DLQ nativa y menor costo.
+
+---
 
 ## 1. Resumen Ejecutivo
 
@@ -390,211 +424,356 @@ Decidimos implementar **AWS DynamoDB** (base de datos NoSQL gestionada) utilizan
 
 ---
 
-## 11. Diagrama de Contenedores (v1 — Separación Pública/Privada)
+## 11. Diagrama de Contenedores (v1 — Track Serverless-Only)
 
-El siguiente diagrama muestra los bloques principales del sistema ubicados en sus subnets correspondientes. Esta es la primera versión; se completará en E4 con queues/topics y workers asíncronos.
+El siguiente diagrama muestra el flujo completo del sistema en el track serverless-only. No existe VPC ni subnets — todos los componentes son servicios gestionados de AWS. Esta es la versión E3; se extiende en E4 con las colas SQS y workers asíncronos.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                          INTERNET                                 │
-│   Usuario Web/Móvil ──────────► HTTPS                            │
-│   Administrador ──────────────► HTTPS                            │
-└───────────────────────────────────┬──────────────────────────────┘
-                                    │
-┌───────────────────────────────────┴──────────────────────────────┐
-│  Cuenta AWS — us-east-1                                           │
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │  VPC — 10.0.0.0/16 · 2 Availability Zones                    │ │
-│  │                                                               │ │
-│  │  ┌─ CAPA PÚBLICA ──────────────────────────────────────────┐ │ │
-│  │  │                                                          │ │ │
-│  │  │  AZ-a (us-east-1a)          AZ-b (us-east-1b)           │ │ │
-│  │  │  ┌──────────────────┐      ┌──────────────────┐        │ │ │
-│  │  │  │ API Gateway       │      │ (API Gateway     │        │ │ │
-│  │  │  │ Servicio regional │      │  es regional)    │        │ │ │
-│  │  │  └────────┬─────────┘      └──────────────────┘        │ │ │
-│  │  │           │                                              │ │ │
-│  │  │           │ integración directa (proxy)                  │ │ │
-│  │  │           ▼                                              │ │ │
-│  │  └──────────────────────────────────────────────────────────┘ │ │
-│  │                                                               │ │
-│  │  ┌─ CAPA PRIVADA (App) ─────────────────────────────────────┐ │ │
-│  │  │                                                          │ │ │
-│  │  │  AZ-a                         AZ-b                       │ │ │
-│  │  │  Subnet 10.0.2.0/24           Subnet 10.0.4.0/24        │ │ │
-│  │  │  ┌──────────────────┐        ┌──────────────────┐      │ │ │
-│  │  │  │ Lambda            │        │ Lambda            │      │ │ │
-│  │  │  │ (API endpoints)   │        │ (API endpoints)   │      │ │ │
-│  │  │  │                   │        │                   │      │ │ │
-│  │  │  │ GET /disponibilidad│       │ GET /disponibilidad│     │ │ │
-│  │  │  │ POST /reservas    │        │ POST /reservas    │      │ │ │
-│  │  │  │ DELETE /reservas  │        │ DELETE /reservas  │      │ │ │
-│  │  │  └───┬──────┬───────┘        └───┬──────┬───────┘      │ │ │
-│  │  │      │      │                    │      │                │ │ │
-│  │  └──────┼──────┼────────────────────┼──────┼────────────────┘ │ │
-│  │         │      │                    │      │                  │ │
-│  │         │      │    ┌───────────────┘      │                  │ │
-│  │         │      │    │         ┌────────────┘                  │ │
-│  │         │      ▼    ▼         ▼                               │ │
-│  │  ┌──────┴──── VPC Endpoints ──┴─────────────────────────────┐ │ │
-│  │  │                                                          │ │ │
-│  │  │  ┌─────────────────────┐   ┌─────────────────────┐      │ │ │
-│  │  │  │ DynamoDB Gateway    │   │ S3 Gateway           │      │ │ │
-│  │  │  │ Endpoint            │   │ Endpoint             │      │ │ │
-│  │  │  │ (com.amazonaws.     │   │ (com.amazonaws.      │      │ │ │
-│  │  │  │  us-east-1.dynamodb)│   │  us-east-1.s3)       │      │ │ │
-│  │  │  └──────────┬──────────┘   └──────────┬──────────┘      │ │ │
-│  │  └─────────────┼─────────────────────────┼─────────────────┘ │ │
-│  │                │                         │                    │ │
-│  └────────────────┼─────────────────────────┼────────────────────┘ │
-│                   │                         │                      │
-│                   ▼                         ▼                      │
-│  ┌────────────────────┐   ┌────────────────────────────┐          │
-│  │ DynamoDB           │   │ S3                          │          │
-│  │ Tabla: reservas     │   │ Bucket: vouchers + reportes │          │
-│  │ GSIs: espacio-fecha │   │ SSE-S3 + versionado        │          │
-│  │        usuario-fecha│   │                             │          │
-│  └────────────────────┘   └────────────────────────────┘          │
-│                                                                    │
-│  ┌──────────────────────────────────────────────────────────────┐ │
-│  │ Servicios externos (vía internet — E4 definirá conectividad) │ │
-│  │ [Pasarela de Pagos]  [Proveedor Notif.]  [Proveedor Ident.]  │ │
-│  └──────────────────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                            INTERNET                                   │
+│   Usuario Web/Móvil ──────────────────────────► HTTPS               │
+│   Administrador ──────────────────────────────► HTTPS               │
+└──────────────────────────────────┬───────────────────────────────────┘
+                                   │
+                      DNS: grupo2.oyd.solid.com.gt
+                                   │
+┌──────────────────────────────────┴───────────────────────────────────┐
+│  Cuenta AWS — us-east-1                                               │
+│                                                                       │
+│  ┌─ Edge & DNS (módulo network/) ──────────────────────────────────┐  │
+│  │                                                                 │  │
+│  │  Route 53 Hosted Zone                                           │  │
+│  │  grupo2.oyd.solid.com.gt  ·  ID: Z0165481J6MHDXNP4MB4          │  │
+│  │  Record: A ALIAS → API Gateway custom domain                   │  │
+│  │                                                                 │  │
+│  │  ACM Certificate  ·  TLS 1.2  ·  validación DNS automática     │  │
+│  └──────────────────────────────┬──────────────────────────────────┘  │
+│                                 │                                     │
+│  ┌─ Ingress (módulo ingress/) ──▼──────────────────────────────────┐  │
+│  │                                                                 │  │
+│  │  API Gateway HTTP API v2                                        │  │
+│  │  ID: dpx91ti4dc  ·  Stage: dev                                  │  │
+│  │  Custom domain : https://grupo2.oyd.solid.com.gt               │  │
+│  │  Default URL   : https://dpx91ti4dc.execute-api.               │  │
+│  │                  us-east-1.amazonaws.com/dev                    │  │
+│  │                                                                 │  │
+│  │  Rutas: GET /  ·  GET /reservations  ·  POST /vouchers         │  │
+│  └──────────────────────────────┬──────────────────────────────────┘  │
+│                                 │ Lambda proxy integration             │
+│                                 │ (aws_lambda_permission scoped        │
+│                                 │  al execution_arn del API GW)        │
+│  ┌─ Cómputo (módulo compute/) ──▼──────────────────────────────────┐  │
+│  │                                                                 │  │
+│  │  Lambda  ·  proyecto-trimestre2-dev-api                        │  │
+│  │  Runtime: python3.12  ·  128 MB  ·  30 s timeout               │  │
+│  │  IAM exec role: policies inline sin wildcard en Resource        │  │
+│  │    - CloudWatch Logs (scoped al log group de esta función)      │  │
+│  │    - DynamoDB: GetItem/PutItem/Query/Scan/Update/Delete         │  │
+│  │    - S3: PutObject/GetObject/DeleteObject                       │  │
+│  └──────────────────┬───────────────────────┬───────────────────────┘  │
+│                     │ IAM role policy         │ IAM role policy          │
+│                     ▼                         ▼                         │
+│  ┌──────────────────────────┐   ┌───────────────────────────────────┐  │
+│  │ DynamoDB                 │   │ S3                                │  │
+│  │ proyecto-trimestre2      │   │ proyecto-trimestre2-dev-storage   │  │
+│  │ -dev-reservas            │   │ SSE-S3  ·  versionado             │  │
+│  │ PAY_PER_REQUEST          │   │ Lifecycle: vouchers/ → IA 30d     │  │
+│  │ GSI: espacio-fecha-index │   │ Bucket policy: deny non-SSL       │  │
+│  │ GSI: usuario-fecha-index │   │                                   │  │
+│  │ TTL: expires_at          │   │                                   │  │
+│  └──────────────────────────┘   └───────────────────────────────────┘  │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Decisiones visibles en el diagrama
 
-| Componente | Capa | Justificación |
-|------------|------|---------------|
-| **API Gateway** | Pública (servicio regional) | Único punto de entrada desde internet. Recibe requests HTTPS del frontend web/móvil. Es un servicio administrado que no reside en subnets de la VPC. |
-| **Lambda** | Privada (app) | Sin exposición directa a internet. Solo recibe tráfico del API Gateway mediante integración proxy. Ubicada en subnets privadas de capa app. |
-| **DynamoDB** | Servicio gestionado | No vive en la VPC. El acceso desde Lambda se da mediante VPC Gateway Endpoint, manteniendo el tráfico en el backbone de AWS sin pasar por internet público. |
-| **S3** | Servicio gestionado | Igual que DynamoDB: acceso privado mediante VPC Gateway Endpoint. Almacena vouchers PDF y reportes de utilización. |
-| **Servicios externos** | Fuera de la VPC | Pasarela de pagos, proveedor de notificaciones e identidad. La conectividad saliente se definirá con detalle en E5 (NAT Gateway si se requiere acceso a internet). |
+| Componente | Cómo se conecta | Justificación |
+|------------|-----------------|---------------|
+| **Route 53 + ACM** | Edge — DNS y TLS | Endpoint estable con dominio personalizado. Sin custom domain, la URL del API Gateway cambia si el recurso se destruye y recrea. ACM elimina la gestión manual de certificados. |
+| **API Gateway HTTP API** | Servicio regional gestionado | Único punto de entrada HTTPS. HTTP API v2 es 71 % más barato que REST API v1 ($1/M vs $3.50/M requests) y tiene menor latencia. No reside en la VPC. |
+| **Lambda** | Servicio gestionado sin VPC | Invocada exclusivamente por el API Gateway gracias al `aws_lambda_permission` con `source_arn` scoped. Sin ENI, sin cold start de VPC, sin subnets. |
+| **DynamoDB** | Acceso directo vía IAM | Servicio gestionado fuera de VPC. El rol de ejecución de la Lambda tiene la política IAM necesaria; no se requiere endpoint de red. |
+| **S3** | Acceso directo vía IAM | Igual que DynamoDB. El bucket tiene bucket policy que deniega non-SSL y el acceso está scoped al ARN específico del bucket. |
 
 ---
 
-## 12. Diseño de Red
+## 12. Diagrama de Contenedores (v2 — E4)
 
-### 12.1 VPC y CIDR
+El siguiente diagrama extiende el v1 incorporando las colas SQS, los workers asíncronos y Amazon SES. Los componentes de red del track serverless-only (Route 53, ACM, API Gateway custom domain) no cambian respecto a E3.
 
-Definimos una **VPC con CIDR `10.0.0.0/16`** para alojar todos los recursos de SportSpace. Este rango proporciona 65,536 direcciones IP privadas, espacio más que suficiente para el MVP y para crecimiento futuro (múltiples ambientes dev/staging/prod dentro del mismo rango usando sub-rangos).
+```mermaid
+flowchart TD
+    %% Actores
+    U((Usuario Web/Móvil))
 
-Justificación del tamaño:
-- `/16` es el rango máximo recomendado por AWS para una VPC. No hay penalización de costo por usar un rango grande.
-- Un rango más pequeño (ej. `/20` con 4,096 IPs) sería suficiente para el MVP, pero `/16` nos da flexibilidad para separar ambientes sin re-diseñar la VPC.
-- Permite subnetting claro: ambiente dev en `10.0.0.0/18`, staging en `10.0.64.0/18`, prod en `10.0.128.0/18`.
+    %% Capa pública
+    subgraph Publico ["Capa Pública"]
+        APIGW["API Gateway\n(HTTPS — regional)"]
+    end
 
-### 12.2 Subnets y Availability Zones
+    %% Capa privada
+    subgraph Privado ["Cómputo Serverless (sin VPC)"]
+        LambdaAPI["Lambda API\nGET /disponibilidad\nPOST /reservas\nDELETE /reservas"]
+        NotifWorker["Lambda notifications-worker\nconsome notifications-queue"]
+        ExpiryWorker["Lambda expiry-worker\nconsome expiry-queue"]
+    end
 
-Elegimos **2 Availability Zones** (us-east-1a, us-east-1b) para el MVP.
+    %% Servicios gestionados
+    subgraph Datos ["Servicios Gestionados AWS (fuera de VPC)"]
+        DDB["DynamoDB\ntabla: reservas\nGSIs: espacio-fecha · usuario-fecha"]
+        S3["S3\nbucket: vouchers + reportes"]
+        NotifQ["SQS Standard\n{project}-{env}-notifications"]
+        NotifDLQ["SQS DLQ\nnotifications-dlq\nretención 14 días"]
+        ExpiryQ["SQS Standard\n{project}-{env}-expiry\ndelay_seconds = 900"]
+        ExpiryDLQ["SQS DLQ\nexpiry-dlq\nretención 24 h"]
+        SES["Amazon SES\nenvío de emails"]
+    end
 
-| Subnet | CIDR | AZ | Capa | Propósito |
-|--------|------|----|----|-----------|
-| `public-a` | `10.0.1.0/24` | us-east-1a | Pública | NAT Gateway |
-| `public-b` | `10.0.3.0/24` | us-east-1b | Pública | NAT Gateway |
-| `private-app-a` | `10.0.2.0/24` | us-east-1a | Privada (app) | Lambda en VPC |
-| `private-app-b` | `10.0.4.0/24` | us-east-1b | Privada (app) | Lambda en VPC |
+    %% Flujos síncronos
+    U -->|HTTPS| APIGW
+    APIGW -->|proxy| LambdaAPI
+    LambdaAPI -->|read / write| DDB
+    LambdaAPI -->|write voucher| S3
 
-**Trade-off — 2 AZs vs 3 AZs:**
+    %% Flujos asíncronos — publicación
+    LambdaAPI -->|publica evento de notificación| NotifQ
+    LambdaAPI -->|publica con delay 900 s| ExpiryQ
 
-| Criterio | 2 AZs (elegido) | 3 AZs |
-|----------|-----------------|-------|
-| **Disponibilidad** | Soporta caída de 1 AZ completa. Servicio sigue funcionando en la otra. | Soporta caída de 2 AZs simultáneas (escenario extremadamente raro). |
-| **Costo** | Sin NAT Gateway. VPC Endpoints son gratuitos. | Si se usara NAT Gateway: $32/AZ/mes × 3 = $96/mes solo en NAT. |
-| **Complejidad** | Menor: 4 subnets totales. | Mayor: 6 subnets, más reglas de ruteo. |
-| **Justificación MVP** | Para ~50 reservas/día, 2 AZs ofrecen alta disponibilidad suficiente. Una tercera AZ no mejora la experiencia del usuario final en este volumen. | Se reconsiderará si el sistema escala a cientos de reservas/día o si se agrega un SLA contractual. |
+    %% Flujos asíncronos — consumo
+    NotifQ -->|event source mapping| NotifWorker
+    NotifWorker -->|SendEmail| SES
+    NotifQ -.->|"redrive maxReceiveCount=3"| NotifDLQ
 
-### 12.3 Conectividad Saliente — NAT Gateway vs VPC Endpoints
+    ExpiryQ -->|event source mapping| ExpiryWorker
+    ExpiryWorker -->|"UpdateItem\nConditionExpression"| DDB
+    ExpiryQ -.->|"redrive maxReceiveCount=3"| ExpiryDLQ
 
-Los recursos en subnets privadas (Lambda) necesitan acceder a DynamoDB y S3. Hay dos mecanismos para darles conectividad:
+    %% Estilos
+    classDef actor fill:#083F8C,stroke:#073B80,color:#fff,stroke-width:2px
+    classDef lambda fill:#1168BD,stroke:#0B4884,color:#fff,stroke-width:2px
+    classDef queue fill:#FF9900,stroke:#CC7A00,color:#000,stroke-width:2px
+    classDef dlq fill:#CC4400,stroke:#993300,color:#fff,stroke-width:2px
+    classDef storage fill:#2E7D32,stroke:#1B5E20,color:#fff,stroke-width:2px
+    classDef external fill:#666666,stroke:#444444,color:#fff,stroke-width:2px
 
-| Mecanismo | Cómo funciona | Costo mensual (MVP) |
-|-----------|---------------|---------------------|
-| **NAT Gateway** | Traduce IPs privadas a IPs públicas. El tráfico sale a internet y llega a DynamoDB/S3 por sus endpoints públicos. | ~$32/AZ/mes (hourly) + $0.045/GB procesado |
-| **VPC Gateway Endpoint** (elegido) | Ruta privada directa dentro del backbone de AWS. El tráfico nunca sale a internet. | **$0** (sin costo por hora ni por GB) |
-
-**Decisión: VPC Gateway Endpoints para DynamoDB y S3.**
-
-Justificación:
-- DynamoDB y S3 son los **únicos** servicios AWS que la Lambda de SportSpace necesita acceder. Ambos soportan Gateway Endpoints (gratuitos).
-- Un NAT Gateway añadiría ~$64/mes (2 AZs × $32) solo por estar encendido, sin contar el tráfico. Para un MVP con ~50 reservas/día, este costo no se justifica.
-- El tráfico por VPC Endpoint nunca abandona la red de AWS, lo cual **mejora la seguridad** (no pasa por internet público) y **reduce latencia** (sin saltos).
-- Los VPC Endpoints se resuelven a nivel de tabla de ruteo: una vez configurados, la Lambda accede a DynamoDB y S3 usando los mismos SDKs, sin cambios de código.
-
-**Desventaja reconocida:** Si en el futuro la Lambda necesita acceder a servicios externos (pasarela de pagos, proveedor de notificaciones vía HTTP), necesitaremos agregar un NAT Gateway. Esta decisión se reevaluará en E4/E5 cuando definamos los flujos asíncronos y la integración con servicios de terceros.
-
-### 12.4 Tablas de Ruteo
-
-| Route Table | Asociada a | Rutas |
-|-------------|-----------|-------|
-| `rt-public` | Subnets públicas (`public-a`, `public-b`) | `0.0.0.0/0` → Internet Gateway; `10.0.0.0/16` → local |
-| `rt-private-app` | Subnets privadas de app (`private-app-a`, `private-app-b`) | `10.0.0.0/16` → local; DynamoDB → VPC Endpoint; S3 → VPC Endpoint |
-
-### 12.5 Security Groups (versión inicial)
-
-Definimos Security Groups por capa con reglas explícitas. La seguridad detallada (IAM, KMS, Secrets Manager) corresponde a E5.
-
-| Security Group | Capa | Reglas de entrada |
-|----------------|------|-------------------|
-| **SG-Lambda** | App | Tráfico solo desde API Gateway (gestionado por el servicio, no requiere regla explícita de SG). Dentro de la VPC, acceso entre Lambdas en el mismo SG. |
-| **SG-VPCEndpoints** | Endpoints | Tráfico HTTPS (443) desde `SG-Lambda` hacia los VPC Endpoints de DynamoDB y S3. |
-
-**Flujo de tráfico end-to-end:**
-```
-Usuario → HTTPS (internet) → API Gateway → Lambda (SG-Lambda, subnets privadas)
-                                                  │
-                                    ┌─────────────┼─────────────┐
-                                    ▼                           ▼
-                          DynamoDB Gateway EP          S3 Gateway EP
-                          (SG-VPCEndpoints)           (SG-VPCEndpoints)
-                                    │                           │
-                                    ▼                           ▼
-                              DynamoDB                      S3
-                          (tabla reservas)          (bucket vouchers)
+    class U actor
+    class LambdaAPI,NotifWorker,ExpiryWorker lambda
+    class NotifQ,ExpiryQ queue
+    class NotifDLQ,ExpiryDLQ dlq
+    class DDB,S3 storage
+    class SES external
 ```
 
 ---
 
-## 13. Preguntas Abiertas
+## 13. Flujos Asíncronos (E4)
+
+### Flujo 1 — Notificaciones
+
+| Campo | Valor |
+|-------|-------|
+| **Tipo** | Comando |
+| **Productor** | Lambda API |
+| **Cola** | `{project}-{env}-notifications` (SQS Standard) |
+| **Consumidor** | Lambda `notifications-worker` |
+| **Visibility timeout** | 60 s (mayor que el timeout del worker de 30 s) |
+| **Manejo de fallos** | `maxReceiveCount = 3` → DLQ con retención 14 días |
+
+**Payload — campos críticos:**
+
+```json
+{
+  "event_type": "reserva_confirmada | reserva_cancelada | recordatorio_24h | bloqueo_notificado",
+  "reserva_id": "<uuid>",
+  "usuario_email": "<email>",
+  "fecha": "YYYY-MM-DD",
+  "hora_inicio": "HH:MM",
+  "codigo": "SPT-YYYY-XXXXXX"
+}
+```
+
+**Eventos que produce:** `reserva_confirmada`, `reserva_cancelada`, `recordatorio_24h`, `bloqueo_notificado`
+
+**Idempotencia:** `reserva_id` como deduplication key. Reenviar el mismo evento no genera email duplicado: el worker verifica el estado de la reserva en DynamoDB antes de invocar SES.
+
+---
+
+### Flujo 2 — Expiración de Bloqueos Optimistas
+
+| Campo | Valor |
+|-------|-------|
+| **Tipo** | Comando |
+| **Productor** | Lambda API (al crear reserva en estado `EN_PROCESO`) |
+| **Cola** | `{project}-{env}-expiry` (SQS Standard, `delay_seconds = 900`) |
+| **Consumidor** | Lambda `expiry-worker` |
+| **Manejo de fallos** | `maxReceiveCount = 3` → DLQ con retención 24 h |
+
+**Payload — campos críticos:**
+
+```json
+{
+  "PK": "RESERVA#<complejo_id>",
+  "SK": "SLOT#<fecha>#<hora>#<espacio_id>",
+  "reserva_id": "<uuid>"
+}
+```
+
+**Idempotencia:** El worker ejecuta un `UpdateItem` con `ConditionExpression = 'estado = :en_proceso'`. Si el usuario completó el pago antes de los 15 min, el estado ya cambió a `CONFIRMADA` y la condición falla silenciosamente: DynamoDB retorna `ConditionalCheckFailedException`, el worker la captura y confirma el mensaje sin error ni reintento innecesario.
+
+---
+
+### Decisión: SQS sobre EventBridge
+
+**Elegimos SQS** para ambos flujos asíncronos con base en los siguientes criterios:
+
+| Criterio | SQS (elegido) | EventBridge |
+|----------|--------------|-------------|
+| **Fan-out** | 1 consumidor por cola — no necesitamos fan-out | Diseñado para múltiples consumidores por evento |
+| **Reintentos / DLQ** | Nativos: `maxReceiveCount` + DLQ sin configuración adicional | Requiere definir retry policy por separado |
+| **Delay nativo** | `delay_seconds` hasta 900 s — cubre exactamente los 15 min de bloqueo | Requiere EventBridge Scheduler o Step Functions para delays |
+| **Costo** | ~$0.40 por millón de mensajes | ~$1.00 por millón de eventos |
+| **Complejidad** | Trigger directo Lambda ← SQS (event source mapping) | Requiere event bus, rules y targets |
+
+**Desventaja reconocida:** Si en el futuro se necesitan múltiples consumidores por evento (analytics, push notifications, audit), se migrará a SNS → SQS fan-out o EventBridge.
+
+---
+
+## 14. Diseño de Red — Track Serverless-Only
+
+### 14.1 Rationale del Track
+
+SportSpace califica para el **track serverless-only** porque tanto el cómputo (AWS Lambda) como los datos (Amazon DynamoDB) son servicios gestionados que operan fuera de VPC. Esto significa que **no se crea ninguna VPC** para SportSpace en este proyecto. El deliverable equivalente al diseño de red es la capa **Edge & DNS**.
+
+**Por qué no aplica VPC:**
+- Lambda sin VPC tiene cold starts menores (sin delay de ENI), menor configuración y cero costo de networking.
+- DynamoDB y S3 son servicios regionales gestionados: la Lambda los alcanza directamente con el IAM role, sin necesidad de endpoints de red privados.
+- El acceso está controlado exclusivamente por políticas IAM con least-privilege, que es más seguro y auditable que Security Groups.
+
+### 14.2 Edge & DNS
+
+El módulo `infra/modules/network/` implementa los tres recursos del deliverable Edge & DNS:
+
+| Recurso | Valor desplegado |
+|---------|-----------------|
+| **Route 53 Hosted Zone** | `grupo2.oyd.solid.com.gt` · ID: `Z0165481J6MHDXNP4MB4` |
+| **NS del dominio** | `ns-1941.awsdns-50.co.uk`, `ns-610.awsdns-12.net`, `ns-1154.awsdns-16.org`, `ns-222.awsdns-27.com` |
+| **ACM Certificate** | `grupo2.oyd.solid.com.gt` · regional `us-east-1` · TLS 1.2 · validación DNS |
+| **API Gateway Custom Domain** | `grupo2.oyd.solid.com.gt` → stage `dev` del HTTP API `dpx91ti4dc` |
+| **Record A ALIAS** | `grupo2.oyd.solid.com.gt` → `target_domain_name` del custom domain |
+
+**Estrategia ACM:** El certificado usa `validation_method = "DNS"`. Los registros CNAME de validación se crean en la hosted zone de Route 53 vía `aws_route53_record` y se espera la emisión con `aws_acm_certificate_validation`. El proceso es completamente automatizado por Terraform.
+
+**Endpoints resultantes:**
+
+| Tipo | URL |
+|------|-----|
+| Custom domain (estable) | `https://grupo2.oyd.solid.com.gt` |
+| API Gateway default (fallback) | `https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev` |
+
+### 14.3 IAM Least-Privilege para Invocación (Deliverable B)
+
+El recurso `aws_lambda_permission` en `modules/network/main.tf` controla quién puede invocar la Lambda:
+
+```hcl
+resource "aws_lambda_permission" "api_gateway_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = var.lambda_function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${var.api_gateway_execution_arn}/*/*"
+}
+```
+
+El `source_arn` está scoped al execution ARN del API Gateway específico de SportSpace. Esto previene que cualquier otra fuente (otra API Gateway, invocación directa por ARN) pueda ejecutar la Lambda. Solo el API Gateway de SportSpace puede invocarla.
+
+### 14.4 Trade-off 1 — HTTP API vs REST API
+
+| Criterio | HTTP API v2 (elegido) | REST API v1 |
+|----------|-----------------------|-------------|
+| **Costo** | $1.00 por millón de requests | $3.50 por millón — 3.5× más caro |
+| **Latencia** | ~10-20 ms menor overhead | Mayor overhead de procesamiento |
+| **Lambda proxy** | Payload format v2.0 (más limpio) | Payload format v1.0 |
+| **Features no disponibles** | AWS WAF nativo, usage plans, API keys | Disponibles |
+| **Decisión** | Para MVP sin WAF ni monetización por API key, HTTP API es suficiente. Si en E5 se requiere WAF, se puede colocar CloudFront delante del HTTP API. | — |
+
+### 14.5 Trade-off 2 — Dominio Personalizado vs URL Default del API Gateway
+
+| Criterio | Custom Domain (elegido) | URL Default del API GW |
+|----------|-------------------------|------------------------|
+| **Estabilidad** | Estable aunque se destruya y recree el API GW | Cambia si el API GW es recreado |
+| **TLS** | Certificado propio gestionado con ACM | TLS gestionado por AWS, pero no personalizable |
+| **Complejidad** | Requiere Route 53 + ACM + api mapping | Ninguna |
+| **Decisión** | La estabilidad del endpoint justifica la complejidad. En un sistema de reservas, el frontend y las integraciones no deben cambiar su URL base cuando se recrea infraestructura. | — |
+
+**Flujo de tráfico end-to-end (serverless-only):**
+```
+Usuario → HTTPS → DNS: grupo2.oyd.solid.com.gt
+                       │
+                  Route 53 A-ALIAS
+                       │
+              API Gateway HTTP API v2
+              (stage dev, custom domain)
+                       │
+              Lambda proxy integration
+              (aws_lambda_permission scoped)
+                       │
+           ┌───────────┴───────────┐
+           ▼                       ▼
+        DynamoDB                   S3
+  (proyecto-trimestre2        (proyecto-trimestre2
+    -dev-reservas)               -dev-storage)
+  acceso por IAM role          acceso por IAM role
+```
+
+---
+
+## 15. Preguntas Abiertas
 
 Las siguientes preguntas permanecen abiertas. Se espera que se resuelvan en entregas posteriores conforme se cubran los temas técnicos correspondientes.
 
-### 13.1 Preguntas de Producto
+### 15.1 Preguntas de Producto
 
 - **¿Cómo se maneja un complejo con decenas de canchas?** ¿La vista de agenda del admin es viable con 20+ espacios simultáneos? ¿Se necesita paginación o filtros adicionales?
 - **¿Reservas grupales o por equipo?** El diseño actual asume una reserva = un usuario. ¿Se requiere asignar múltiples personas a una misma reserva?
 
-### 13.2 Preguntas Técnicas
+### 15.2 Preguntas Técnicas
 
-- **[E3 — Red]:** ~~Número de Availability Zones y si se justifica alta disponibilidad para el MVP. ¿Cómo estructuraremos la VPC interconectando la API Gateway con Lambda y Dynamo de forma segura?~~ **Resuelto en esta entrega.** Se definió VPC con CIDR `10.0.0.0/16`, 2 AZs, subnets públicas/privadas, y VPC Gateway Endpoints para DynamoDB y S3. La conectividad saliente a internet queda pendiente para E4/E5.
-- **[E3 — Red (nueva)]:** ¿Conviene mantener la Lambda fuera de la VPC para evitar el cold start adicional por ENI (Elastic Network Interface)? Dejarla fuera simplificaría el diseño de red pero perderíamos el aislamiento de capa privada. Se resolverá en E5 cuando evaluemos el impacto real del cold start con métricas.
-- **[E4 — Asíncrono]:** Mecanismo exacto para la respuesta del proveedor notificaciones y el workflow de pago sin encolar la API Gateway (EventBridge vs SQS). ¿Cómo afecta la decisión de VPC Endpoints (sin NAT Gateway) a la capacidad de la Lambda para invocar servicios externos como SES o SNS?
+- **[E3 — Red]:** ~~¿Cómo estructuraremos la VPC interconectando la API Gateway con Lambda y DynamoDB de forma segura?~~ **Resuelto en esta entrega.** El equipo califica para el track serverless-only: sin VPC ni subnets. La capa de red se implementó como Edge & DNS: dominio `grupo2.oyd.solid.com.gt` con Route 53 + ACM + custom domain en API Gateway. El acceso a DynamoDB y S3 es directo por IAM role, sin endpoints de red.
+- **[E4 — Asíncrono]:** ~~Mecanismo exacto para notificaciones y expiración de bloqueos (EventBridge vs SQS). ¿Cómo afecta el track serverless-only a la capacidad de Lambda para invocar servicios externos como SES?~~ **Resuelto en esta entrega.** Se eligió SQS Standard con DLQ. Al estar en el track serverless-only sin VPC, el worker Lambda accede a SES directamente por IAM role — sin configuración de red adicional.
+- **[E5 — Asíncrono (nuevas)]:**
+  - ¿Cómo verificar el email del usuario en SES antes de enviar? ¿Se usa SES sandbox con identidades verificadas o se solicita salida de sandbox desde el inicio del proyecto?
+  - ¿Qué métrica de alarma usar para la DLQ? ¿`ApproximateNumberOfMessagesVisible > 0` en CloudWatch es suficiente, o conviene una alarma con período más largo para evitar falsos positivos por mensajes en tránsito?
 - **[E5 — Seguridad]:** Estrategia de autenticación: ¿JWT validado en API Gateway o directo en el servicio? ¿Integración con Cognito o Auth0?
 - **[E5 — Costos]:** Estimado de costo mensual para un complejo mediano (~50 reservas/día). Pendiente de calculadora de proveedor.
 
 ---
 
-## 14. Anexo IA — Uso de Inteligencia Artificial
+## 16. Anexo IA — Uso de Inteligencia Artificial
 
 Este anexo documenta el uso de herramientas de IA durante la elaboración del proyecto, conforme a la política del curso.
 
-### 14.1 E1 (Scope y Mockups)
+### 16.1 E1 — Scope y Mockups
 
 - **Qué le pedimos a la IA (Claude, Sonnet 4.6):** Proponer casos de uso priorizados, sugerir criterios de éxito, generar mockups y redactar el scope.
 - **Qué aceptamos sin cambios:** Mockups como punto de visual funcional y la mayoría de preguntas de contexto futuro.
 - **Qué editamos:** Redujimos historias de 10 a 7, e incorporamos el "bloqueo optimista" de 15 minutos en la reserva en vez del valor mínimo propuesto.
 - **Qué descartamos:** Sistema de reseñas de canchas (fuera de scope), mapa con Google Maps (evitando dependencias prescindibles) y descartamos la arquitectura por microservicios en favor de una monolítica Serverless controlada.
 
-### 14.2 E2 (Cómputo y Datos)
+### 16.2 E2 — Cómputo y Datos
 
 - **Analizar Trade-offs:** Utilizamos la IA para validar nuestras hipótesis sobre ECS Fargate frente a Lambda. Le planteamos nuestro escenario de tráfico en ráfagas para el MVP, y utilizamos su análisis para confirmar las ventajas del esquema de facturación "pago por uso" del Free Tier de Lambda frente a la carga continua de un contenedor inactivo.
 - **Diseño del Modelo NoSQL:** Le pedimos a la IA evaluar nuestro planteamiento para modelar un dominio tradicionalmente relacional usando Single Table Design. La IA nos ayudó a confirmar la pertinencia técnica de los GSIs (`espacio-fecha-index` y `usuario-fecha-index`), dándonos seguridad de que con DynamoDB eliminaríamos cuellos de botella por JOINs para nuestros patrones principales (disponibilidad y listado de historial).
 
-### 14.3 E3 — Red
+### 16.3 E3 — Red (Track Serverless-Only)
 
-- **Diseño de la VPC y subnetting:** Le pedimos a la IA que validara nuestra propuesta de CIDR `10.0.0.0/16` y la distribución de subnets en 2 AZs. La IA confirmó que el diseño era correcto para un MVP serverless y sugirió alternativas de subnetting más granular (separar capa de datos en subnets propias) que consideramos innecesarias para DynamoDB por ser un servicio gestionado fuera de la VPC.
-- **Trade-off NAT Gateway vs VPC Endpoints:** Le pedimos comparar ambos mecanismos para nuestro caso específico (Lambda → DynamoDB + S3). La IA nos ayudó a cuantificar el costo mensual de NAT Gateway (~$64/mes para 2 AZs) y confirmó que VPC Gateway Endpoints cubren nuestro caso de uso a costo cero, lo cual reforzó nuestra decisión.
-- **Qué descartamos:** La IA sugirió usar AWS PrivateLink (Interface Endpoints) en vez de Gateway Endpoints argumentando mayor flexibilidad. Lo descartamos porque los Gateway Endpoints son gratuitos y suficientes para DynamoDB y S3; Interface Endpoints tienen costo por hora (~$7.20/mes por endpoint) y no ofrecen beneficio adicional para nuestro patrón de acceso.
+- **Qué le pedimos:** Confirmar si el equipo calificaba para el track serverless-only dado que usamos Lambda y DynamoDB; validar la decisión de no crear VPC; comparar HTTP API v2 vs REST API v1 para nuestro caso de uso; revisar el diseño de Edge & DNS con Route 53 + ACM + custom domain en API Gateway.
+- **Qué aceptamos:** La confirmación de que Lambda + DynamoDB sin VPC es el enfoque correcto para serverless-only, y que el `aws_lambda_permission` con `source_arn` scoped al execution ARN específico del API Gateway es el control de seguridad adecuado para el deliverable B de least-privilege.
+- **Qué editamos:** La IA inicialmente sugirió configurar VPC + subnets para mayor "aislamiento". El equipo descartó esa recomendación porque agrega complejidad de ENI, costo de NAT Gateway y cold starts adicionales sin beneficio real en un stack serverless donde DynamoDB y S3 son servicios externos a la VPC de todas formas.
+- **Qué descartamos:** La sugerencia de agregar AWS WAF directamente al API Gateway. Se evaluó como válida para producción pero excesiva para el MVP académico; si se requiere en E5, se añade CloudFront delante del HTTP API.
+
+### 16.4 E4 — Procesamiento Asíncrono
+
+- **Qué le pedimos:** Validar la elección de SQS vs EventBridge para nuestro patrón de un consumidor por evento; confirmar que `delay_seconds = 900` es el mecanismo correcto para implementar el bloqueo optimista de 15 min sin Lambda Scheduler; revisar la estrategia de idempotencia con `ConditionExpression`.
+- **Qué aceptamos:** La confirmación de que SQS con delay es más simple que EventBridge Scheduler para el caso del bloqueo optimista: no requiere recursos adicionales ni lógica de programación de eventos; el delay nativo de SQS cubre exactamente los 900 s requeridos.
+- **Qué editamos:** La distinción entre evento y comando — la IA los trataba como sinónimos en los payloads. El equipo los diferenció explícitamente: los mensajes en nuestras colas son **comandos** (instrucciones dirigidas a un consumidor conocido), no eventos de dominio de broadcast.
+- **Qué descartamos:** La sugerencia de usar EventBridge Pipes para conectar DynamoDB Streams con SQS y disparar la expiración reactivamente desde cambios de estado en DynamoDB. Consideramos innecesaria esa complejidad para el MVP: DynamoDB Streams añade latencia variable y acopla la expiración al modelo de datos; el delay de SQS es más predecible y directo.

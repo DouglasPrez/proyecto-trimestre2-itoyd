@@ -57,3 +57,10 @@ variable "s3_bucket_arn" {
   description = "ARN of the S3 storage bucket. Scopes the IAM policy — no wildcard Resource."
   type        = string
 }
+
+variable "secret_key" {
+  description = "JWT signing secret injected into Lambda as SECRET_KEY env var."
+  type        = string
+  sensitive   = true
+  default     = "sportspace-dev-secret-change-in-production-2026"
+}

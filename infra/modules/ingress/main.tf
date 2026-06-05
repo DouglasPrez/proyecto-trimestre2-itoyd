@@ -20,6 +20,7 @@ resource "aws_apigatewayv2_integration" "lambda" {
   payload_format_version = "2.0"
 }
 
+# E3 — rutas específicas (POC, se mantienen para backward-compat)
 resource "aws_apigatewayv2_route" "get_reservations" {
   api_id    = aws_apigatewayv2_api.sportspace.id
   route_key = "GET /reservations"
@@ -35,6 +36,13 @@ resource "aws_apigatewayv2_route" "post_vouchers" {
 resource "aws_apigatewayv2_route" "health" {
   api_id    = aws_apigatewayv2_api.sportspace.id
   route_key = "GET ${var.health_check_path}"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+# E4 — catch-all: cualquier ruta no definida arriba va a FastAPI/mangum
+resource "aws_apigatewayv2_route" "default" {
+  api_id    = aws_apigatewayv2_api.sportspace.id
+  route_key = "$default"
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
