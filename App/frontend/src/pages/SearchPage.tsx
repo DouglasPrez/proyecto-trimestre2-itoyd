@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, MapPin, Calendar, Trophy } from 'lucide-react'
 import { format } from 'date-fns'
@@ -51,19 +51,24 @@ export default function SearchPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const handleSearch = async () => {
+  const search = async (d: string, s: string, z: string) => {
     setLoading(true)
     setSearched(true)
     try {
-      const params: Record<string, string> = { date }
-      if (sport) params.sport = sport
-      if (zone) params.zone = zone
+      const params: Record<string, string> = { date: d }
+      if (s) params.sport = s
+      if (z) params.zone = z
       const { data } = await api.get('/availability/search', { params })
       setResults(data)
     } finally {
       setLoading(false)
     }
   }
+
+  const handleSearch = () => search(date, sport, zone)
+
+  // Carga los resultados automáticamente al abrir la página
+  useEffect(() => { search(date, sport, zone) }, [])
 
   const handleSlotClick = (space: SpaceAvailability, slot: TimeSlot) => {
     if (slot.status !== 'available') return

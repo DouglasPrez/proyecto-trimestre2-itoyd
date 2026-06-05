@@ -1,7 +1,17 @@
 # ---------------------------------------------------------------------------
-# Empaqueta src/index.py como el handler real de Delivery 3
+# Empaquetado — dos modos:
+#   1. app.zip existe (generado por App/backend/build_lambda.sh):
+#      → se despliega el backend FastAPI completo (E4+)
+#   2. app.zip no existe (fallback):
+#      → se empaqueta src/index.py solo (handler POC de E3)
 # ---------------------------------------------------------------------------
+locals {
+  use_app_zip = fileexists("${path.module}/app.zip")
+}
+
 data "archive_file" "handler" {
+  # Solo se empaqueta cuando no hay app.zip precompilado
+  count       = local.use_app_zip ? 0 : 1
   type        = "zip"
   output_path = "${path.module}/handler.zip"
   source_file = "${path.root}/../src/index.py"
@@ -108,8 +118,11 @@ resource "aws_lambda_function" "this" {
   function_name = "${var.project_name}-${var.environment}-${var.name}"
   role          = aws_iam_role.lambda_exec.arn
 
-  filename         = data.archive_file.handler.output_path
-  source_code_hash = data.archive_file.handler.output_base64sha256
+  filename = local.use_app_zip ? "${path.module}/app.zip" : data.archive_file.handler[0].output_path
+  source_code_hash = local.use_app_zip ? try(
+    filebase64sha256("${path.module}/app.zip"),
+    data.archive_file.handler[0].output_base64sha256
+  ) : data.archive_file.handler[0].output_base64sha256
 
   runtime     = var.runtime
   handler     = var.handler
@@ -122,6 +135,8 @@ resource "aws_lambda_function" "this" {
       PROJECT_NAME   = var.project_name
       DYNAMODB_TABLE = var.dynamodb_table_name
       S3_BUCKET      = var.s3_bucket_name
+      SECRET_KEY     = var.secret_key
+      # AWS_REGION es reservada — el runtime Lambda la inyecta automáticamente
     }
   }
 
