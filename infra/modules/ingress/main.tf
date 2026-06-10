@@ -39,6 +39,13 @@ resource "aws_apigatewayv2_route" "health" {
   target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
 }
 
+# D4 — enqueue route (envía mensaje a SQS y retorna HTTP 202)
+resource "aws_apigatewayv2_route" "enqueue" {
+  api_id    = aws_apigatewayv2_api.sportspace.id
+  route_key = "POST /reservations/enqueue"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
 # E4 — catch-all: cualquier ruta no definida arriba va a FastAPI/mangum
 resource "aws_apigatewayv2_route" "default" {
   api_id    = aws_apigatewayv2_api.sportspace.id

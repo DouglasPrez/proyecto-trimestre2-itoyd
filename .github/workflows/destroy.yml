@@ -1,0 +1,46 @@
+name: Gated Destroy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy (dev or staging)'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: 1.8.5
+  TF_INFRA_DIR: infra
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_INFRA_DIR }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
+      TF_VAR_secret_key: ${{ secrets.DEV_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Confirmation
+        run: echo "Destroying: ${{ github.event.inputs.environment }}"
+
+      - name: Terraform Init
+        run: terraform init -backend-config=envs/${{ github.event.inputs.environment }}/backend-${{ github.event.inputs.environment }}.hcl
+
+      - name: Terraform Destroy
+        run: terraform destroy -var-file=envs/${{ github.event.inputs.environment }}/${{ github.event.inputs.environment }}.tfvars -auto-approve
