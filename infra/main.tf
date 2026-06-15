@@ -97,6 +97,7 @@ module "network" {
   source = "./modules/network"
 
   domain_name               = var.domain_name
+  base_domain_name          = var.base_domain_name
   aws_region                = var.region
   project_name              = var.project_name
   environment               = var.environment

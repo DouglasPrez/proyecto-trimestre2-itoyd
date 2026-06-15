@@ -59,9 +59,9 @@ output "hosted_zone_id" {
   value       = module.network.hosted_zone_id
 }
 
-output "hosted_zone_name_servers" {
-  description = "Name servers for the Route 53 zone. Configure at your domain registrar."
-  value       = module.network.hosted_zone_name_servers
+output "base_domain_name" {
+  description = "Base Route53 domain name shared across environments."
+  value       = module.network.base_domain_name
 }
 
 # D4 — Async module outputs

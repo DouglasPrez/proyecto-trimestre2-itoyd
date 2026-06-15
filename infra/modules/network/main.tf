@@ -2,13 +2,8 @@
 # Deliverable A — Edge & DNS (Serverless-Only Track)
 # ---------------------------------------------------------------------------
 
-resource "aws_route53_zone" "main" {
-  name = var.domain_name
-
-  tags = {
-    Environment = var.environment
-    Project     = var.project_name
-  }
+data "aws_route53_zone" "main" {
+  name = var.base_domain_name
 }
 
 resource "aws_acm_certificate" "api" {
@@ -39,7 +34,7 @@ resource "aws_route53_record" "cert_validation" {
   records         = [each.value.record]
   ttl             = 60
   type            = each.value.type
-  zone_id         = aws_route53_zone.main.zone_id
+  zone_id         = data.aws_route53_zone.main.zone_id
 }
 
 resource "aws_acm_certificate_validation" "api" {
@@ -69,7 +64,7 @@ resource "aws_apigatewayv2_api_mapping" "api" {
 }
 
 resource "aws_route53_record" "api_alias" {
-  zone_id = aws_route53_zone.main.zone_id
+  zone_id = data.aws_route53_zone.main.zone_id
   name    = var.domain_name
   type    = "A"
 

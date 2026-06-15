@@ -3,6 +3,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "base_domain_name" {
+  description = "Base Route53 domain zone (shared across environments)."
+  type        = string
+  default     = "grupo2.oyd.solid.com.gt"
+}
+
 variable "aws_region" {
   description = "AWS region where API Gateway is deployed. ACM certificate must be in the same region."
   type        = string
