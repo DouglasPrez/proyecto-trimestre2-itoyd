@@ -2,6 +2,12 @@
 # Deliverable A — Edge & DNS (Serverless-Only Track)
 # ---------------------------------------------------------------------------
 
+data "aws_route53_zone" "parent" {
+  count        = var.parent_zone_name == null ? 0 : 1
+  name         = var.parent_zone_name
+  private_zone = false
+}
+
 resource "aws_route53_zone" "main" {
   name = var.domain_name
 
@@ -9,6 +15,15 @@ resource "aws_route53_zone" "main" {
     Environment = var.environment
     Project     = var.project_name
   }
+}
+
+resource "aws_route53_record" "delegation" {
+  count   = var.parent_zone_name == null ? 0 : 1
+  zone_id = data.aws_route53_zone.parent[0].zone_id
+  name    = var.domain_name
+  type    = "NS"
+  ttl     = 300
+  records = aws_route53_zone.main.name_servers
 }
 
 resource "aws_acm_certificate" "api" {
@@ -45,6 +60,8 @@ resource "aws_route53_record" "cert_validation" {
 resource "aws_acm_certificate_validation" "api" {
   certificate_arn         = aws_acm_certificate.api.arn
   validation_record_fqdns = [for record in aws_route53_record.cert_validation : record.fqdn]
+
+  depends_on = [aws_route53_record.delegation]
 }
 
 resource "aws_apigatewayv2_domain_name" "api" {

@@ -38,6 +38,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "parent_zone_name" {
+  description = "Optional parent Route 53 zone used to delegate the custom domain for staging."
+  type        = string
+  default     = null
+}
+
 variable "health_check_path" {
   description = "Path used for API Gateway health/readiness checks."
   type        = string

@@ -3,6 +3,12 @@ variable "domain_name" {
   type        = string
 }
 
+variable "parent_zone_name" {
+  description = "Optional parent hosted zone used to delegate this domain (e.g. grupo2.oyd.solid.com.gt for staging-grupo2.oyd.solid.com.gt)."
+  type        = string
+  default     = null
+}
+
 variable "aws_region" {
   description = "AWS region where API Gateway is deployed. ACM certificate must be in the same region."
   type        = string

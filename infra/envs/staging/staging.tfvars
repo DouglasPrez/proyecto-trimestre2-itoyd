@@ -7,6 +7,7 @@ lambda_timeout     = 30
 
 # D3 — dominio sub-delegado por los instructores
 domain_name       = "staging-grupo2.oyd.solid.com.gt"
+parent_zone_name  = "grupo2.oyd.solid.com.gt"
 health_check_path = "/"
 api_stage_name    = "staging"
 
