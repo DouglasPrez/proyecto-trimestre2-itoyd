@@ -4,9 +4,9 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - main
+    paths:
+      - 'infra/**'
+      - 'src/**'
 
 defaults:
   run:
@@ -16,7 +16,7 @@ jobs:
   plan:
     name: Lint · Init · Validate · Plan
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    environment: dev 
 
     permissions:
       contents: read
@@ -25,7 +25,9 @@ jobs:
     env:
       AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION:            ${{ secrets.AWS_REGION }}
+      AWS_REGION:            us-east-1
+      TF_VAR_secret_key:     ${{ secrets.DEV_SECRET_KEY }}
+      TF_VAR_db_password:    ${{ secrets.DB_PASSWORD }} 
 
     steps:
       - name: Checkout repository
@@ -34,18 +36,13 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "~1.8"
+          terraform_version: 1.8.5 
 
       - name: Terraform Format Check
         run: terraform fmt --check -recursive
 
       - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="bucket=proyecto-trimestre2-v2-tfstate" \
-            -backend-config="key=infra/terraform.tfstate" \
-            -backend-config="region=${{ secrets.AWS_REGION }}" \
-            -backend-config="dynamodb_table=proyecto-trimestre2-v2-tflock"
+        run: terraform init -backend-config=envs/dev/backend-dev.hcl
 
       - name: Terraform Validate
         run: terraform validate
@@ -57,9 +54,8 @@ jobs:
           terraform plan \
             -var-file="envs/dev/dev.tfvars" \
             -no-color 2>&1 | tee plan.txt
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
 
+      # Publica de forma automática el resultado del plan en el Pull Request
       - name: Comment Plan on PR
         continue-on-error: true
         uses: actions/github-script@v7
@@ -68,7 +64,7 @@ jobs:
             const fs   = require('fs');
             const plan = fs.readFileSync('infra/plan.txt', 'utf8');
             const body = [
-              '## 🗺️ Terraform Plan — Delivery 3 (Network + Ingress)',
+              '## 🗺️ Terraform Plan — Entorno de Desarrollo (CI)',
               '',
               '<details><summary>Ver plan completo</summary>',
               '',
@@ -83,41 +79,3 @@ jobs:
               issue_number: context.issue.number,
               body,
             });
-
-  apply:
-    name: Apply on merge
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    permissions:
-      contents: read
-
-    env:
-      AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION:            ${{ secrets.AWS_REGION }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: "~1.8"
-
-      - name: Terraform Init
-        run: |
-          terraform init \
-            -backend-config="bucket=proyecto-trimestre2-v2-tfstate" \
-            -backend-config="key=infra/terraform.tfstate" \
-            -backend-config="region=${{ secrets.AWS_REGION }}" \
-            -backend-config="dynamodb_table=proyecto-trimestre2-v2-tflock"
-
-      - name: Terraform Apply
-        run: |
-          terraform apply \
-            -var-file="envs/dev/dev.tfvars" \
-            -auto-approve
-        env:
-          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}

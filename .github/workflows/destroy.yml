@@ -22,6 +22,8 @@ env:
 jobs:
   destroy:
     runs-on: ubuntu-latest
+    # Corregido: Esto le dice a GitHub qué entorno usar dinámicamente
+    environment: ${{ github.event.inputs.environment }}
     defaults:
       run:
         working-directory: ${{ env.TF_INFRA_DIR }}
@@ -29,7 +31,8 @@ jobs:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: us-east-1
-      TF_VAR_secret_key: ${{ secrets.DEV_SECRET_KEY }}
+      # Corregido: Elige dinámicamente el secreto correcto según tu elección
+      TF_VAR_secret_key: ${{ github.event.inputs.environment == 'dev' && secrets.DEV_SECRET_KEY || secrets.STAGING_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
@@ -44,3 +47,4 @@ jobs:
 
       - name: Terraform Destroy
         run: terraform destroy -var-file=envs/${{ github.event.inputs.environment }}/${{ github.event.inputs.environment }}.tfvars -auto-approve
+        
