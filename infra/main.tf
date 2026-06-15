@@ -39,6 +39,7 @@ module "compute" {
   event_batch_size                         = var.event_batch_size
   event_maximum_batching_window_in_seconds = var.event_maximum_batching_window_in_seconds
   event_bisect_batch_on_function_error     = var.event_bisect_batch_on_function_error
+  enable_async  = true
 }
 
 # ---------------------------------------------------------------------------
