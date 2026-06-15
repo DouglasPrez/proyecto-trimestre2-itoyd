@@ -152,7 +152,7 @@ resource "aws_lambda_function" "this" {
 # D4 — IAM SQS policy: scoped al ARN específico de la queue (sin wildcard)
 # ---------------------------------------------------------------------------
 resource "aws_iam_role_policy" "lambda_sqs" {
-  count = var.sqs_queue_arn != "" ? 1 : 0
+  count = var.enable_async ? 1 : 0
   name  = "${var.project_name}-${var.environment}-${var.name}-sqs-policy"
   role  = aws_iam_role.lambda_exec.id
 
@@ -178,7 +178,7 @@ resource "aws_iam_role_policy" "lambda_sqs" {
 # D4 — Async Consumer Lambda (SQS-triggered worker)
 # ---------------------------------------------------------------------------
 resource "aws_lambda_function" "async_consumer" {
-  count = var.sqs_queue_arn != "" ? 1 : 0
+  count = var.enable_async ? 1 : 0
 
   function_name = "${var.project_name}-${var.environment}-${var.async_consumer_name}"
   role          = aws_iam_role.lambda_exec.arn
@@ -216,7 +216,7 @@ resource "aws_lambda_function" "async_consumer" {
 # D4 — Event Source Mapping (SQS → Async Consumer Lambda)
 # ---------------------------------------------------------------------------
 resource "aws_lambda_event_source_mapping" "sqs_to_consumer" {
-  count = var.sqs_queue_arn != "" ? 1 : 0
+  count = var.enable_async ? 1 : 0
 
   event_source_arn = var.sqs_queue_arn
   function_name    = aws_lambda_function.async_consumer[0].arn

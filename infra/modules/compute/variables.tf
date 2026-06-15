@@ -115,3 +115,9 @@ variable "event_bisect_batch_on_function_error" {
   type        = bool
   default     = false
 }
+
+variable "enable_async" {
+  description = "Habilita los recursos async (SQS policy, consumer lambda, event source mapping)"
+  type        = bool
+  default     = false
+}
