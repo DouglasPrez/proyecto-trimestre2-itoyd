@@ -95,12 +95,14 @@ jobs:
 
       - name: Post Plan Comment
         uses: actions/github-script@v7
+        env:
+          PLAN_OUTPUT: ${{ steps.plan_output.outputs.plan_output }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const planOutput = `${{ steps.plan_output.outputs.plan_output }}`;
+            const planOutput = process.env.PLAN_OUTPUT || '(no plan output)';
             const body = `## Terraform Plan (dev)\n\n\`\`\`\n${planOutput}\n\`\`\``;
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
