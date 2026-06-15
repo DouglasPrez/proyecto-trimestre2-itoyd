@@ -29,3 +29,4 @@ scheduler_timezone            = "America/Guatemala"
 async_consumer_name        = "async-consumer"
 async_consumer_memory_size = 128
 async_consumer_timeout     = 60
+
