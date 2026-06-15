@@ -11,7 +11,7 @@ health_check_path = "/"
 api_stage_name    = "dev"
 
 # D4 — Async module
-async_visibility_timeout_seconds    = 30
+async_visibility_timeout_seconds    = 60
 async_message_retention_seconds     = 345600
 async_max_receive_count             = 5
 async_dlq_message_retention_seconds = 1209600
