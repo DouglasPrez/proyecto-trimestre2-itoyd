@@ -1,25 +1,36 @@
 """
-SportSpace API — Lambda handler para Delivery 3 (E2E proof)
+SportSpace API — Lambda handler para Delivery 4 (Async Infrastructure)
 Runtime: Python 3.12
 
-GET  /reservations  — lee de DynamoDB y retorna ítems como JSON
-POST /vouchers      — escribe un objeto a S3 y retorna HTTP 201 con el key
+Rutas HTTP (API Gateway → handler):
+  GET  /reservations           — lee de DynamoDB y retorna ítems como JSON
+  POST /vouchers               — escribe un objeto a S3 y retorna HTTP 201 con el key
+  POST /reservations/enqueue   — envía mensaje a SQS, retorna HTTP 202 con message_id
+  GET  /                       — health check
+
+Entry point async_consumer (SQS → Lambda):
+  Se activa por el event source mapping de SQS.
+  Lee el mensaje, escribe un objeto a S3.
 
 Variables de entorno (inyectadas por Terraform):
   DYNAMODB_TABLE  — nombre de la tabla de reservas
   S3_BUCKET       — nombre del bucket de vouchers
+  SQS_QUEUE_URL   — URL de la cola SQS (solo consumer)
 """
 
 import json
 import os
 import boto3
+import uuid
 from datetime import datetime, timezone
 
 dynamodb = boto3.resource("dynamodb", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 s3_client = boto3.client("s3", region_name=os.environ.get("AWS_REGION", "us-east-1"))
+sqs_client = boto3.client("sqs", region_name=os.environ.get("AWS_REGION", "us-east-1"))
 
 TABLE_NAME  = os.environ["DYNAMODB_TABLE"]
 BUCKET_NAME = os.environ["S3_BUCKET"]
+SQS_QUEUE_URL = os.environ.get("SQS_QUEUE_URL", "")
 
 
 def _response(status_code: int, body: dict) -> dict:
@@ -59,9 +70,63 @@ def handler(event: dict, context) -> dict:
         )
         return _response(201, {"object_key": object_key, "bucket": BUCKET_NAME})
 
+    # POST /reservations/enqueue — envía mensaje a SQS (Delivery 4)
+    if route_key == "POST /reservations/enqueue":
+        raw_body = event.get("body") or "{}"
+        try:
+            payload = json.loads(raw_body)
+        except json.JSONDecodeError:
+            return _response(400, {"error": "Invalid JSON body"})
+
+        if not SQS_QUEUE_URL:
+            return _response(500, {"error": "SQS_QUEUE_URL not configured"})
+
+        message_id = str(uuid.uuid4())
+        message_body = json.dumps({
+            "message_id": message_id,
+            "payload": payload,
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        })
+
+        response = sqs_client.send_message(
+            QueueUrl    = SQS_QUEUE_URL,
+            MessageBody = message_body,
+        )
+
+        return _response(202, {
+            "message_id": message_id,
+            "sqs_message_id": response["MessageId"],
+        })
+
     # GET / — health check
     if route_key == "GET /":
         return _response(200, {"status": "ok", "service": "sportspace-api"})
 
     return _response(404, {"error": f"Route not found: {route_key}"})
+
+
+def async_consumer(event: dict, context) -> None:
+    """
+    D4 — Async consumer (SQS-triggered).
+    Lee mensajes de SQS, escribe cada uno como objeto en S3.
+    """
+    for record in event.get("Records", []):
+        try:
+            message_body = json.loads(record["body"])
+            message_id = message_body.get("message_id", record.get("messageId", str(uuid.uuid4())))
+            timestamp  = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            object_key = f"async/{timestamp}-{message_id}.json"
+
+            s3_client.put_object(
+                Bucket      = BUCKET_NAME,
+                Key         = object_key,
+                Body        = json.dumps(message_body, default=str),
+                ContentType = "application/json",
+            )
+
+            print(f"Processed message {message_id} -> s3://{BUCKET_NAME}/{object_key}")
+
+        except Exception as e:
+            print(f"Error processing record: {e}")
+            raise
     

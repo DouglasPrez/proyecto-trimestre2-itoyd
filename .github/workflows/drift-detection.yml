@@ -1,0 +1,69 @@
+name: Drift Detection
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: 1.8.5
+  TF_INFRA_DIR: infra
+
+jobs:
+  drift-check:
+    name: Drift Check (dev)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_INFRA_DIR }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
+      TF_VAR_secret_key: ${{ secrets.DEV_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init (dev)
+        run: terraform init -backend-config=envs/dev/backend-dev.hcl
+
+      - name: Terraform Plan with Drift Check
+        id: plan
+        continue-on-error: true
+        run: |
+          set +e
+          terraform plan -var-file=envs/dev/dev.tfvars -detailed-exitcode -no-color > plan_output.txt 2>&1
+          PLAN_EXIT_CODE=$?
+          echo "exit_code=$PLAN_EXIT_CODE" >> $GITHUB_OUTPUT
+          cat plan_output.txt
+
+      - name: Report Drift
+        if: always()
+        run: |
+          EXIT_CODE=${{ steps.plan.outputs.exit_code }}
+          echo "## Drift Detection Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Exit code:** $EXIT_CODE" >> $GITHUB_STEP_SUMMARY
+          if [ "$EXIT_CODE" -eq 2 ]; then
+            echo "::warning::Drift detected! Infrastructure has changes."
+            echo "**DRIFT DETECTED**" >> $GITHUB_STEP_SUMMARY
+          elif [ "$EXIT_CODE" -eq 0 ]; then
+            echo "No drift detected." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Terraform plan failed with exit code $EXIT_CODE" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+      - name: Post Plan Output
+        if: always()
+        run: |
+          echo "## Plan Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat plan_output.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

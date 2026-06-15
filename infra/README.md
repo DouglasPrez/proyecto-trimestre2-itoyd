@@ -249,3 +249,56 @@ curl -v -X POST -d '{"test":"delivery3-e2e"}' https://dpx91ti4dc.../dev/vouchers
 ### Deliverable E — CI Pipeline Integration
 
 **GitHub Actions plan** — `infra/evidence/ci-plan.png` (tomar screenshot del workflow run)
+
+---
+
+## Evidence — Delivery 4
+
+### Deliverable A — Async Messaging Module
+
+**terraform output** — `infra/evidence/async-foundation.txt`
+```
+terraform output
+```
+
+### Deliverable B — Event-Driven Compute
+
+**terraform plan excerpt** — `infra/evidence/event-source-plan.txt`
+
+**Console screenshot (trigger)** — `infra/evidence/event-source.png`
+
+### Deliverable C — Scheduled Jobs
+
+**Console screenshot** — `infra/evidence/scheduler.png`
+
+**terraform plan excerpt** — `infra/evidence/scheduler-plan.txt`
+
+### Deliverable D — Full CD Pipeline
+
+**PR plan comment** — Link al PR donde el plan se ejecutó y comentó
+
+**Screenshots:**
+
+| # | File | Description |
+|---|---|---|
+| 1 | `infra/evidence/github-environments.png` | Settings → Environments: dev + staging con protection rules |
+| 2 | `infra/evidence/ci-apply-dev.png` | Apply a dev automático después del merge |
+| 3 | `infra/evidence/ci-apply-staging.png` | Apply a staging con approval gate y reviewer |
+| 4 | `infra/evidence/ci-destroy.png` | Gated destroy workflow_dispatch |
+| 5 | `infra/evidence/ci-drift.png` | Drift detection schedule run con plan output |
+| 6 | `infra/evidence/ruleset-config.png` | Ruleset Active en main con status checks |
+| 7 | `infra/evidence/ruleset-blocked-merge.png` | PR bloqueado por check failing |
+
+### Deliverable E — End-to-End Async Proof
+
+**Curl POST output** — `infra/evidence/async-enqueue.txt`
+```
+curl -v -X POST -H "Content-Type: application/json" \
+  -d '{"key": "value"}' \
+  https://grupo2.oyd.solid.com.gt/reservations/enqueue
+→ HTTP 202 {"message_id": "..."}
+```
+
+**Consumer invocation log** — `infra/evidence/async-consumer.png` (CloudWatch Logs)
+
+**New object in S3** — `infra/evidence/async-object.png` (consola S3 → bucket → async/)

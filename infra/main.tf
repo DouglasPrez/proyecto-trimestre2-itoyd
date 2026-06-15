@@ -29,6 +29,17 @@ module "compute" {
   s3_bucket_name      = module.storage.bucket_name
   dynamodb_table_arn  = module.database.table_arn
   s3_bucket_arn       = module.storage.bucket_arn
+
+  # D4 — SQS integration
+  sqs_queue_url                            = module.async.queue_url
+  sqs_queue_arn                            = module.async.queue_arn
+  async_consumer_name                      = var.async_consumer_name
+  async_consumer_memory_size               = var.async_consumer_memory_size
+  async_consumer_timeout                   = var.async_consumer_timeout
+  event_batch_size                         = var.event_batch_size
+  event_maximum_batching_window_in_seconds = var.event_maximum_batching_window_in_seconds
+  event_bisect_batch_on_function_error     = var.event_bisect_batch_on_function_error
+  enable_async                             = true
 }
 
 # ---------------------------------------------------------------------------
@@ -93,4 +104,32 @@ module "network" {
   api_gateway_stage_name    = module.ingress.stage_name
   api_gateway_execution_arn = module.ingress.execution_arn
   lambda_function_name      = module.compute.function_name
+}
+
+# ---------------------------------------------------------------------------
+# Módulo de Scheduled Jobs (Delivery 4 / Deliverable C)
+# ---------------------------------------------------------------------------
+module "scheduler" {
+  source = "./modules/scheduler"
+
+  schedule_expression = var.scheduler_schedule_expression
+  target_lambda_arn   = module.compute.function_arn
+  scheduler_timezone  = var.scheduler_timezone
+  environment         = var.environment
+  project_name        = var.project_name
+}
+
+# ---------------------------------------------------------------------------
+# Módulo Async — SQS + DLQ (Delivery 4 / Deliverable A)
+# ---------------------------------------------------------------------------
+module "async" {
+  source = "./modules/async"
+
+  queue_name_prefix             = "${var.project_name}-${var.environment}-reservations"
+  visibility_timeout_seconds    = var.async_visibility_timeout_seconds
+  message_retention_seconds     = var.async_message_retention_seconds
+  max_receive_count             = var.async_max_receive_count
+  dlq_message_retention_seconds = var.async_dlq_message_retention_seconds
+  environment                   = var.environment
+  project_name                  = var.project_name
 }

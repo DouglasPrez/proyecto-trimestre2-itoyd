@@ -64,3 +64,60 @@ variable "secret_key" {
   sensitive   = true
   default     = "sportspace-dev-secret-change-in-production-2026"
 }
+
+# D4 — SQS queue integration
+variable "sqs_queue_url" {
+  description = "URL of the SQS queue for async message processing."
+  type        = string
+  default     = ""
+}
+
+variable "sqs_queue_arn" {
+  description = "ARN of the SQS queue for IAM policy scoping."
+  type        = string
+  default     = ""
+}
+
+# D4 — Async consumer configuration
+variable "async_consumer_name" {
+  description = "Base name for the async consumer Lambda function."
+  type        = string
+  default     = "async-consumer"
+}
+
+variable "async_consumer_memory_size" {
+  description = "Memory in MB for the async consumer Lambda."
+  type        = number
+  default     = 128
+}
+
+variable "async_consumer_timeout" {
+  description = "Timeout in seconds for the async consumer Lambda."
+  type        = number
+  default     = 60
+}
+
+# D4 — Event source mapping variables
+variable "event_batch_size" {
+  description = "Maximum number of records to retrieve per invocation."
+  type        = number
+  default     = 10
+}
+
+variable "event_maximum_batching_window_in_seconds" {
+  description = "Maximum batching window in seconds."
+  type        = number
+  default     = 5
+}
+
+variable "event_bisect_batch_on_function_error" {
+  description = "If the function returns an error, split the batch in two and retry."
+  type        = bool
+  default     = false
+}
+
+variable "enable_async" {
+  description = "Habilita los recursos async (SQS policy, consumer lambda, event source mapping)"
+  type        = bool
+  default     = false
+}

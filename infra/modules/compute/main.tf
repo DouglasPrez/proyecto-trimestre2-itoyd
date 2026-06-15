@@ -136,6 +136,7 @@ resource "aws_lambda_function" "this" {
       DYNAMODB_TABLE = var.dynamodb_table_name
       S3_BUCKET      = var.s3_bucket_name
       SECRET_KEY     = var.secret_key
+      SQS_QUEUE_URL  = var.sqs_queue_url
       # AWS_REGION es reservada — el runtime Lambda la inyecta automáticamente
     }
   }
@@ -145,4 +146,84 @@ resource "aws_lambda_function" "this" {
     Project     = var.project_name
     Name        = "${var.project_name}-${var.environment}-${var.name}"
   }
+}
+
+# ---------------------------------------------------------------------------
+# D4 — IAM SQS policy: scoped al ARN específico de la queue (sin wildcard)
+# ---------------------------------------------------------------------------
+resource "aws_iam_role_policy" "lambda_sqs" {
+  count = var.enable_async ? 1 : 0
+  name  = "${var.project_name}-${var.environment}-${var.name}-sqs-policy"
+  role  = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "SQSAccess"
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes"
+        ]
+        Resource = var.sqs_queue_arn
+      }
+    ]
+  })
+}
+
+# ---------------------------------------------------------------------------
+# D4 — Async Consumer Lambda (SQS-triggered worker)
+# ---------------------------------------------------------------------------
+resource "aws_lambda_function" "async_consumer" {
+  count = var.enable_async ? 1 : 0
+
+  function_name = "${var.project_name}-${var.environment}-${var.async_consumer_name}"
+  role          = aws_iam_role.lambda_exec.arn
+
+  filename = local.use_app_zip ? "${path.module}/app.zip" : data.archive_file.handler[0].output_path
+  source_code_hash = local.use_app_zip ? try(
+    filebase64sha256("${path.module}/app.zip"),
+    data.archive_file.handler[0].output_base64sha256
+  ) : data.archive_file.handler[0].output_base64sha256
+
+  runtime     = var.runtime
+  handler     = "index.async_consumer"
+  memory_size = var.async_consumer_memory_size
+  timeout     = var.async_consumer_timeout
+
+  environment {
+    variables = {
+      ENVIRONMENT    = var.environment
+      PROJECT_NAME   = var.project_name
+      DYNAMODB_TABLE = var.dynamodb_table_name
+      S3_BUCKET      = var.s3_bucket_name
+      SQS_QUEUE_URL  = var.sqs_queue_url
+      SECRET_KEY     = var.secret_key
+    }
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    Name        = "${var.project_name}-${var.environment}-${var.async_consumer_name}"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# D4 — Event Source Mapping (SQS → Async Consumer Lambda)
+# ---------------------------------------------------------------------------
+resource "aws_lambda_event_source_mapping" "sqs_to_consumer" {
+  count = var.enable_async ? 1 : 0
+
+  event_source_arn = var.sqs_queue_arn
+  function_name    = aws_lambda_function.async_consumer[0].arn
+
+  batch_size                         = var.event_batch_size
+  maximum_batching_window_in_seconds = var.event_maximum_batching_window_in_seconds
+  bisect_batch_on_function_error     = var.event_bisect_batch_on_function_error
+
+  enabled = true
 }

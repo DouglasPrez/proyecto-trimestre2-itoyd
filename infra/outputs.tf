@@ -63,3 +63,44 @@ output "hosted_zone_name_servers" {
   description = "Name servers for the Route 53 zone. Configure at your domain registrar."
   value       = module.network.hosted_zone_name_servers
 }
+
+# D4 — Async module outputs
+output "async_queue_url" {
+  description = "URL of the async SQS queue."
+  value       = module.async.queue_url
+}
+
+output "async_queue_arn" {
+  description = "ARN of the async SQS queue."
+  value       = module.async.queue_arn
+}
+
+output "async_queue_name" {
+  description = "Name of the async SQS queue."
+  value       = module.async.queue_name
+}
+
+output "async_dlq_url" {
+  description = "URL of the async dead-letter queue."
+  value       = module.async.dlq_url
+}
+
+output "async_dlq_arn" {
+  description = "ARN of the async dead-letter queue."
+  value       = module.async.dlq_arn
+}
+
+output "async_dlq_name" {
+  description = "Name of the async dead-letter queue."
+  value       = module.async.dlq_name
+}
+
+output "async_consumer_function_arn" {
+  description = "ARN of the async consumer Lambda function."
+  value       = module.compute.async_consumer_function_arn
+}
+
+output "async_consumer_function_name" {
+  description = "Name of the async consumer Lambda function."
+  value       = module.compute.async_consumer_function_name
+}

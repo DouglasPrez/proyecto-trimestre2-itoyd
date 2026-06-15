@@ -1,0 +1,110 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'infra/**'
+      - 'src/**'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: 1.8.5
+  TF_INFRA_DIR: infra
+
+jobs:
+  terraform-fmt:
+    name: terraform fmt
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_INFRA_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform fmt --check -recursive
+
+  terraform-validate:
+    name: terraform validate
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_INFRA_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform init -backend=false
+      - run: terraform validate
+
+  terraform-plan:
+    name: terraform plan
+    runs-on: ubuntu-latest
+    needs: [terraform-fmt, terraform-validate]
+    defaults:
+      run:
+        working-directory: ${{ env.TF_INFRA_DIR }}
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: us-east-1
+      TF_VAR_secret_key: ${{ secrets.DEV_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform Init (dev)
+        run: terraform init -backend-config=envs/dev/backend-dev.hcl
+
+      - name: Terraform Plan (dev)
+        run: terraform plan -var-file=envs/dev/dev.tfvars -out=tfplan-dev
+
+      - name: Upload Plan Artifact (dev)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-dev
+          path: ${{ env.TF_INFRA_DIR }}/tfplan-dev
+          retention-days: 7
+
+      - name: Terraform Plan (staging)
+        run: terraform plan -var-file=envs/staging/staging.tfvars -out=tfplan-staging
+
+      - name: Upload Plan Artifact (staging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan-staging
+          path: ${{ env.TF_INFRA_DIR }}/tfplan-staging
+          retention-days: 7
+
+      - name: Render Plan Output
+        id: plan_output
+        run: |
+          PLAN=$(terraform plan -var-file=envs/dev/dev.tfvars -no-color 2>&1) || true
+          echo "$PLAN"
+          PLAN_ESCAPED=$(echo "$PLAN" | sed 's/`/\\`/g' | sed 's/$/\\n/' | tr -d '\n')
+          echo "plan_output=$PLAN_ESCAPED" >> $GITHUB_OUTPUT
+
+      - name: Post Plan Comment
+        uses: actions/github-script@v7
+        env:
+          PLAN_OUTPUT: ${{ steps.plan_output.outputs.plan_output }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const planOutput = process.env.PLAN_OUTPUT || '(no plan output)';
+            const body = `## Terraform Plan (dev)\n\n\`\`\`\n${planOutput}\n\`\`\``;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

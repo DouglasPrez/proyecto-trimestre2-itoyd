@@ -1,14 +1,14 @@
-environment        = "dev"
+environment        = "staging"
 project_name       = "proyecto-trimestre2"
 region             = "us-east-1"
-bucket_name        = "proyecto-trimestre2-v2-bucket"
+bucket_name        = "proyecto-trimestre2-v2-bucket-staging"
 lambda_memory_size = 128
 lambda_timeout     = 30
 
 # D3 — dominio sub-delegado por los instructores
 domain_name       = "grupo2.oyd.solid.com.gt"
 health_check_path = "/"
-api_stage_name    = "dev"
+api_stage_name    = "staging"
 
 # D4 — Async module
 async_visibility_timeout_seconds    = 30

@@ -49,3 +49,79 @@ variable "api_stage_name" {
   type        = string
   default     = "dev"
 }
+
+# D4 — Async module variables
+variable "async_visibility_timeout_seconds" {
+  description = "Visibility timeout for the async SQS queue in seconds."
+  type        = number
+  default     = 30
+}
+
+variable "async_message_retention_seconds" {
+  description = "Message retention period for the async SQS queue in seconds."
+  type        = number
+  default     = 345600
+}
+
+variable "async_max_receive_count" {
+  description = "Max receive count before messages are sent to the DLQ."
+  type        = number
+  default     = 5
+}
+
+variable "async_dlq_message_retention_seconds" {
+  description = "Message retention period for the DLQ in seconds."
+  type        = number
+  default     = 1209600
+}
+
+# D4 — Event source mapping variables
+variable "event_batch_size" {
+  description = "Maximum number of records to retrieve per Lambda invocation."
+  type        = number
+  default     = 10
+}
+
+variable "event_maximum_batching_window_in_seconds" {
+  description = "Maximum batching window in seconds."
+  type        = number
+  default     = 5
+}
+
+variable "event_bisect_batch_on_function_error" {
+  description = "If the function returns an error, split the batch in two and retry."
+  type        = bool
+  default     = false
+}
+
+# D4 — Scheduler variables
+variable "scheduler_schedule_expression" {
+  description = "Cron or rate expression for the EventBridge Scheduler."
+  type        = string
+  default     = "cron(0 6 * * ? *)"
+}
+
+variable "scheduler_timezone" {
+  description = "Timezone for the EventBridge Scheduler."
+  type        = string
+  default     = "America/Guatemala"
+}
+
+# D4 — Async consumer variables
+variable "async_consumer_name" {
+  description = "Base name for the async consumer Lambda function."
+  type        = string
+  default     = "async-consumer"
+}
+
+variable "async_consumer_memory_size" {
+  description = "Memory in MB for the async consumer Lambda."
+  type        = number
+  default     = 128
+}
+
+variable "async_consumer_timeout" {
+  description = "Timeout in seconds for the async consumer Lambda."
+  type        = number
+  default     = 60
+}
