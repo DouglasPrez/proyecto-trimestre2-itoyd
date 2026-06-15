@@ -127,7 +127,7 @@ Configurado en Settings → Rules → Rulesets, targeting `main`, estado **Activ
 
 **Flujo complete (enqueue → consumer → S3):**
 
-1. **Producer** — El endpoint `POST /reservations/enqueue` (a través del API Gateway, dominio `grupo2.oyd.solid.com.gt`) recibe un JSON body, genera un `message_id` (UUID v4), construye el mensaje con `message_id`, `payload` y `timestamp`, y lo envía a la SQS queue mediante `sqs_client.send_message`. Retorna HTTP 202 con el `message_id`.
+1. **Producer** — El endpoint `POST /reservations/enqueue` (a través del API Gateway, dominio `dev.proyecto.grupo2.oyd.solid.com.gt`) recibe un JSON body, genera un `message_id` (UUID v4), construye el mensaje con `message_id`, `payload` y `timestamp`, y lo envía a la SQS queue mediante `sqs_client.send_message`. Retorna HTTP 202 con el `message_id`.
 2. **Queue** — SQS retiene el mensaje y lo entrega al event source mapping configurado en el consumer Lambda.
 3. **Consumer** — La función `async_consumer` (handler `index.async_consumer`) es invocada por SQS con un batch de mensajes. Por cada mensaje, lee el `message_id` del cuerpo, construye un object key en formato `async/{timestamp}-{message_id}.json`, y escribe el mensaje completo al bucket S3.
 

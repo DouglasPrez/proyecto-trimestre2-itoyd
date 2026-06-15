@@ -295,7 +295,7 @@ terraform output
 ```
 curl -v -X POST -H "Content-Type: application/json" \
   -d '{"key": "value"}' \
-  https://grupo2.oyd.solid.com.gt/reservations/enqueue
+  https://dev.proyecto.grupo2.oyd.solid.com.gt/reservations/enqueue
 → HTTP 202 {"message_id": "..."}
 ```
 

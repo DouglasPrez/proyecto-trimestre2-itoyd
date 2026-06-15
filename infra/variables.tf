@@ -41,7 +41,7 @@ variable "domain_name" {
 variable "base_domain_name" {
   description = "Base Route53 domain zone (shared across environments)."
   type        = string
-  default     = "grupo2.oyd.solid.com.gt"
+  default     = "proyecto.grupo2.oyd.solid.com.gt"
 }
 
 variable "health_check_path" {
