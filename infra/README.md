@@ -228,7 +228,7 @@ curl -v https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev/
 → 200 OK  {"status": "ok", "service": "sportspace-api"}
 ```
 
-**Screenshot** — `infra/evidence/ingress-healthy.png` (tomar de consola AWS → API Gateway → Integrations)
+![Ingress Healthy](evidence/ingress-healthy.png)
 
 ### Deliverable D — End-to-End Connectivity Proof
 
@@ -244,11 +244,11 @@ curl -v -X POST -d '{"test":"delivery3-e2e"}' https://dpx91ti4dc.../dev/vouchers
 → 201 Created  {"object_key": "vouchers/20260604T013310Z.json", "bucket": "proyecto-trimestre2-dev-storage"}
 ```
 
-**Screenshot S3** — `infra/evidence/e2e-storage.png` (tomar de consola AWS → S3 → proyecto-trimestre2-dev-storage → vouchers/)
+![Screenshot S3](evidence/e2e-storage.png)
 
 ### Deliverable E — CI Pipeline Integration
 
-**GitHub Actions plan** — `infra/evidence/ci-plan.png` (tomar screenshot del workflow run)
+![GitHub Actions plan](evidence/ci-plan.png)
 
 ---
 
