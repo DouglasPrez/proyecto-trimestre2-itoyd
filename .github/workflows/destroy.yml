@@ -40,11 +40,11 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Confirmation
-        run: echo "Destroying: ${{ github.event.inputs.environment }}"
+        run: |
+          echo "Destroying: ${{ github.event.inputs.environment }}"
 
       - name: Terraform Init
         run: terraform init -backend-config=envs/${{ github.event.inputs.environment }}/backend-${{ github.event.inputs.environment }}.hcl
 
       - name: Terraform Destroy
         run: terraform destroy -var-file=envs/${{ github.event.inputs.environment }}/${{ github.event.inputs.environment }}.tfvars -auto-approve
-        
