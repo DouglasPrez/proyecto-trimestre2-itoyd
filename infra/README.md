@@ -292,7 +292,7 @@ Full output: [async-foundation.txt](evidence/async-foundation.txt)
 | 4 | Ruleset Config | ![Ruleset](evidence/ruleset-config.png) |
 | 5 | CI Destroy | ![CI Destroy](evidence/ci-destroy.png.png) |
 | 6 | CI Drift | ![CI Drift](evidence/ci-drift.png.png) |
-| 7 | PR Blocked | *Pendiente — capturar PR con check failing* |
+| 7 | PR Blocked | ![PR Blocked](evidence/pr-blocked.png) |
 
 ### Deliverable E — End-to-End Async Proof
 
