@@ -3,10 +3,10 @@ variable "domain_name" {
   type        = string
 }
 
-variable "parent_zone_name" {
-  description = "Optional parent hosted zone used to delegate this domain (e.g. grupo2.oyd.solid.com.gt for staging-grupo2.oyd.solid.com.gt)."
+variable "base_domain_name" {
+  description = "Base Route53 domain zone (shared across environments)."
   type        = string
-  default     = null
+  default     = "proyecto.grupo2.oyd.solid.com.gt"
 }
 
 variable "aws_region" {

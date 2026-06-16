@@ -6,7 +6,7 @@ lambda_memory_size = 128
 lambda_timeout     = 30
 
 # D3 — dominio sub-delegado por los instructores
-domain_name       = "grupo2.oyd.solid.com.gt"
+domain_name       = "dev.proyecto.grupo2.oyd.solid.com.gt"
 health_check_path = "/"
 api_stage_name    = "dev"
 

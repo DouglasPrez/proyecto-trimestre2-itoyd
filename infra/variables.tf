@@ -38,10 +38,10 @@ variable "domain_name" {
   type        = string
 }
 
-variable "parent_zone_name" {
-  description = "Optional parent Route 53 zone used to delegate the custom domain for staging."
+variable "base_domain_name" {
+  description = "Base Route53 domain zone (shared across environments)."
   type        = string
-  default     = null
+  default     = "proyecto.grupo2.oyd.solid.com.gt"
 }
 
 variable "health_check_path" {

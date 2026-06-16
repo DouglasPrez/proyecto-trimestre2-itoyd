@@ -1,17 +1,21 @@
 name: CD Apply
+
 on:
   push:
     branches: [main]
     paths:
       - 'infra/**'
       - 'src/**'
+
 permissions:
   id-token: write
   contents: read
   pull-requests: write
+
 env:
   TF_VERSION: 1.8.5
   TF_INFRA_DIR: infra
+
 jobs:
   apply-dev:
     name: Apply Dev
@@ -25,16 +29,36 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION: us-east-1
       TF_VAR_secret_key: ${{ secrets.DEV_SECRET_KEY }}
+    outputs:
+      plan_found: ${{ steps.check_artifact.outputs.found }}
     steps:
       - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Download Dev Plan Artifact from PR
+        id: download_artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-dev
+          path: ${{ env.TF_INFRA_DIR }}
+
+      - name: Check Plan Artifact Exists
+        id: check_artifact
+        run: |
+          if [ -f "tfplan-dev" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Terraform Init (dev)
+        if: steps.check_artifact.outputs.found == 'true'
         run: terraform init -backend-config=envs/dev/backend-dev.hcl
-      - name: Terraform Plan (dev)
-        run: terraform plan -var-file=envs/dev/dev.tfvars -out=tfplan-dev
+
       - name: Terraform Apply (dev)
+        if: steps.check_artifact.outputs.found == 'true'
         run: terraform apply tfplan-dev
 
   apply-staging:
@@ -55,9 +79,16 @@ jobs:
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Download Staging Plan Artifact from PR
+        id: download_artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-staging
+          path: ${{ env.TF_INFRA_DIR }}
+
       - name: Terraform Init (staging)
         run: terraform init -backend-config=envs/staging/backend-staging.hcl
-      - name: Terraform Plan (staging)
-        run: terraform plan -var-file=envs/staging/staging.tfvars -out=tfplan-staging
+
       - name: Terraform Apply (staging)
         run: terraform apply tfplan-staging

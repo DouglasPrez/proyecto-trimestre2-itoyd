@@ -127,7 +127,7 @@ Configurado en Settings → Rules → Rulesets, targeting `main`, estado **Activ
 
 **Flujo complete (enqueue → consumer → S3):**
 
-1. **Producer** — El endpoint `POST /reservations/enqueue` (a través del API Gateway, dominio `grupo2.oyd.solid.com.gt`) recibe un JSON body, genera un `message_id` (UUID v4), construye el mensaje con `message_id`, `payload` y `timestamp`, y lo envía a la SQS queue mediante `sqs_client.send_message`. Retorna HTTP 202 con el `message_id`.
+1. **Producer** — El endpoint `POST /reservations/enqueue` (a través del API Gateway, dominio `dev.proyecto.grupo2.oyd.solid.com.gt`) recibe un JSON body, genera un `message_id` (UUID v4), construye el mensaje con `message_id`, `payload` y `timestamp`, y lo envía a la SQS queue mediante `sqs_client.send_message`. Retorna HTTP 202 con el `message_id`.
 2. **Queue** — SQS retiene el mensaje y lo entrega al event source mapping configurado en el consumer Lambda.
 3. **Consumer** — La función `async_consumer` (handler `index.async_consumer`) es invocada por SQS con un batch de mensajes. Por cada mensaje, lee el `message_id` del cuerpo, construye un object key en formato `async/{timestamp}-{message_id}.json`, y escribe el mensaje completo al bucket S3.
 
@@ -170,10 +170,11 @@ El trade-off es que con workspaces el backend S3 tiene un solo bucket con un sol
 
 ## Evidence Index
 
-| Deliverable | Evidence File |
-|---|---|
-| A — Async Messaging | `infra/evidence/async-foundation.txt` |
-| B — Event-Driven Compute | `infra/evidence/event-source-plan.txt` + `infra/evidence/event-source.png` |
-| C — Scheduled Jobs | `infra/evidence/scheduler.png` + `infra/evidence/scheduler-plan.txt` |
-| D — CD Pipeline | `infra/evidence/github-environments.png`, `ci-apply-dev.png`, `ci-apply-staging.png`, `ci-destroy.png`, `ci-drift.png`, `ruleset-config.png`, `ruleset-blocked-merge.png` |
-| E — End-to-End Async | `infra/evidence/async-enqueue.txt`, `infra/evidence/async-consumer.png`, `infra/evidence/async-object.png` |
+| Deliverable | Evidence File | Status |
+|---|---|---|
+| A — Async Messaging | `async-foundation.txt` | ✅ |
+| B — Event-Driven Compute | `event-source-plan.txt` + `event-source.png` | ✅ |
+| C — Scheduled Jobs | `scheduler.png` + `scheduler-plan.txt` | ✅ |
+| D — CD Pipeline | `github-environments.png`, `ci-apply-dev.png`, `ci-apply-staging.png`, `ruleset-config.png` | ✅ |
+| | `ci-destroy.png`, `ci-drift.png`, `ruleset-blocked-merge.png` | ❌ Pendiente |
+| E — End-to-End Async | `async-enqueue.txt`, `async-consumer.png`, `async-object.png` | ✅ |
