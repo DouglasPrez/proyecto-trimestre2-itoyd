@@ -134,3 +134,8 @@ module "async" {
   environment                   = var.environment
   project_name                  = var.project_name
 }
+
+# DELIBERATE fmt BREAK — remove before merge
+locals {
+    broken_indent = "this will fail fmt"
+}
