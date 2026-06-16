@@ -29,6 +29,12 @@
 | 14 | [Diseño de Red — Track Serverless-Only](#14-diseño-de-red--track-serverless-only) |
 | 15 | [Preguntas Abiertas](#15-preguntas-abiertas) |
 | 16 | [Anexo IA](#16-anexo-ia--uso-de-inteligencia-artificial) |
+| 17 | [Detalle del Componente Más Complejo](#17-detalle-del-componente-más-complejo-flujo-de-reserva-con-bloqueo-optimista) |
+| 18 | [API Surface](#18-api-surface) |
+| 19 | [Modelo de Seguridad](#19-modelo-de-seguridad) |
+| 20 | [Plan de Observabilidad](#20-plan-de-observabilidad) |
+| 21 | [Estimado de Costo Mensual](#21-estimado-de-costo-mensual) |
+| 22 | [Riesgos y Decisiones Pendientes](#22-riesgos-y-decisiones-pendientes) |
 
 ---
 
@@ -57,6 +63,13 @@ Con el diseño de red establecido en E3, en esta iteración incorporamos la capa
 * **Capa asíncrona sobre el diseño de red:** Se agrega la capa asíncrona sin modificar la capa Edge & DNS definida en E3. Las colas SQS y los workers Lambda son servicios gestionados; al estar en el track serverless-only no requieren configuración de red adicional.
 * **Diagrama de contenedores actualizado:** El diagrama v2 incluye las colas SQS (`notifications-queue` y `expiry-queue`) y sus workers Lambda que se suman a la arquitectura existente API Gateway → Lambda API → DynamoDB/S3.
 * **Pregunta abierta de E3 resuelta:** Se responde la pregunta sobre EventBridge vs SQS. Se eligió SQS por ser la opción más simple para el patrón de un único consumidor por evento, con DLQ nativa y menor costo.
+
+### Iteración E4 → E5 (Seguridad, Observabilidad y Costos)
+* **Modelo de seguridad completo:** Se definen roles IAM por servicio con mínimo privilegio, se documenta la estrategia de autenticación JWT vía API Gateway con Cognito, cifrado en tránsito y en reposo.
+* **Plan de observabilidad:** Se agregan logs estructurados con correlation IDs, métricas RED para Lambda y SQS, y tres alarmas con threshold y acción definidos.
+* **Estimado de costo:** Se calcula el costo mensual para el MVP (~50 reservas/día) usando precios públicos de AWS. Resultado: ~$0.93/mes gracias al Free Tier y las decisiones de diseño previas.
+* **Detalle del componente más complejo:** Se documenta el flujo de reserva con bloqueo optimista como diagrama de estados con transiciones explícitas.
+* **Preguntas E5 resueltas:** Se responden las preguntas sobre autenticación JWT y estrategia de alarmas para DLQ.
 
 ---
 
@@ -743,8 +756,9 @@ Las siguientes preguntas permanecen abiertas. Se espera que se resuelvan en entr
 - **[E5 — Asíncrono (nuevas)]:**
   - ¿Cómo verificar el email del usuario en SES antes de enviar? ¿Se usa SES sandbox con identidades verificadas o se solicita salida de sandbox desde el inicio del proyecto?
   - ¿Qué métrica de alarma usar para la DLQ? ¿`ApproximateNumberOfMessagesVisible > 0` en CloudWatch es suficiente, o conviene una alarma con período más largo para evitar falsos positivos por mensajes en tránsito?
-- **[E5 — Seguridad]:** Estrategia de autenticación: ¿JWT validado en API Gateway o directo en el servicio? ¿Integración con Cognito o Auth0?
-- **[E5 — Costos]:** Estimado de costo mensual para un complejo mediano (~50 reservas/día). Pendiente de calculadora de proveedor.
+- **[E5 — Autenticación]:** ~~Estrategia JWT: ¿validado en API Gateway o en Lambda? ¿Cognito o Auth0?~~ **Resuelto.** JWT validado en API Gateway mediante JWT Authorizer nativo con Amazon Cognito User Pool. Lambda recibe el contexto ya validado sin re-validar el token.
+- **[E5 — Alarmas DLQ]:** ~~¿`ApproximateNumberOfMessagesVisible > 0` es suficiente?~~ **Resuelto.** Sí, con ventana de 5 min. Para evitar falsos positivos por mensajes en tránsito se usa período de 5 min en lugar de 1 min.
+- **[E5 — Costos]:** ~~Estimado de costo mensual para ~50 reservas/día.~~ **Resuelto.** ~$0.93/mes. Ver sección 21.
 
 ---
 
@@ -777,3 +791,152 @@ Este anexo documenta el uso de herramientas de IA durante la elaboración del pr
 - **Qué aceptamos:** La confirmación de que SQS con delay es más simple que EventBridge Scheduler para el caso del bloqueo optimista: no requiere recursos adicionales ni lógica de programación de eventos; el delay nativo de SQS cubre exactamente los 900 s requeridos.
 - **Qué editamos:** La distinción entre evento y comando — la IA los trataba como sinónimos en los payloads. El equipo los diferenció explícitamente: los mensajes en nuestras colas son **comandos** (instrucciones dirigidas a un consumidor conocido), no eventos de dominio de broadcast.
 - **Qué descartamos:** La sugerencia de usar EventBridge Pipes para conectar DynamoDB Streams con SQS y disparar la expiración reactivamente desde cambios de estado en DynamoDB. Consideramos innecesaria esa complejidad para el MVP: DynamoDB Streams añade latencia variable y acopla la expiración al modelo de datos; el delay de SQS es más predecible y directo.
+
+### 16.5 E5 — Seguridad, Observabilidad y Costos
+
+- **Qué le pedimos:** Validar el modelo IAM de mínimo privilegio por servicio; confirmar que las métricas RED son las adecuadas para Lambda + SQS; calcular el estimado de costo mensual con los precios públicos de AWS; revisar la elección de Cognito sobre Auth0.
+- **Qué aceptamos:** La estructura de la tabla de roles IAM y la lógica de las alarmas de DLQ como señal de fallos acumulados.
+- **Qué editamos:** El estimado de costo — la IA calculó un valor más alto porque asumió tráfico continuo de 24h; el equipo ajustó con los supuestos reales del MVP (tráfico en ráfagas, no constante) y aplicó correctamente los Free Tiers.
+- **Qué descartamos:** La sugerencia de agregar AWS X-Ray para tracing distribuido — consideramos que CloudWatch Logs con `reserva_id` como correlation ID es suficiente para el MVP. X-Ray agrega costo (~$5/mes por millón de trazas) y complejidad de instrumentación innecesarios en esta etapa.
+- **Reflexión final sobre IA en el proyecto:** La IA aceleró significativamente el trabajo en borradores, validación de trade-offs y estructuración de tablas. Las decisiones más importantes del proyecto — Lambda sobre Fargate, track serverless-only, SQS sobre EventBridge, VPC Endpoints sobre NAT Gateway — las tomó el equipo basándose en el análisis de costo y los patrones de acceso reales de SportSpace. La IA se usó para confirmar y explorar alternativas, no para decidir. El mayor aprendizaje fue aprender a editar activamente lo que produce la IA para que refleje las restricciones reales del proyecto en lugar de soluciones genéricas de "best practices".
+
+---
+
+## 17. Detalle del Componente Más Complejo: Flujo de Reserva con Bloqueo Optimista
+
+El componente más complejo de SportSpace combina escritura atómica, bloqueo temporal, confirmación de pago y expiración asíncrona. A continuación se documenta como diagrama de estados y flujo paso a paso.
+
+### 17.1 Diagrama de Estados
+
+```mermaid
+stateDiagram-v2
+    [*] --> DISPONIBLE
+    DISPONIBLE --> EN_PROCESO: POST /reservas\nattribute_not_exists(PK)\n+ encolar SQS expiry (delay 900s)
+    EN_PROCESO --> CONFIRMADA: POST /reservas/confirmar\npago exitoso + voucher S3\n+ encolar notificación
+    EN_PROCESO --> EXPIRADA: expiry-worker (15 min)\nUpdateItem\nConditionExpression='estado=EN_PROCESO'
+    CONFIRMADA --> CANCELADA: DELETE /reservas/{id}\nverificar titularidad\n+ calcular reembolso\n+ encolar notificación
+    EXPIRADA --> [*]
+    CANCELADA --> [*]
+```
+
+### 17.2 Flujo Paso a Paso
+
+1. **POST /reservas** → la Lambda API verifica disponibilidad con una lectura de **consistencia fuerte** en DynamoDB (sin caché, para evitar overbooking — ver decisión en sección 10.3).
+2. **Escritura condicional `attribute_not_exists(PK)`** — si otro usuario reservó el mismo slot en el mismo instante, DynamoDB rechaza la escritura con `ConditionalCheckFailedException` y la Lambda responde `409 Conflict`.
+3. Si la escritura es exitosa, se encola un mensaje en **SQS expiry** con `delay_seconds = 900` (15 min).
+4. La Lambda retorna `reserva_id` y `expires_at` al frontend, que muestra el countdown de 15 minutos (Mockup 2).
+5. **POST /reservas/confirmar** → si el pago es exitoso, la Lambda actualiza el estado a `CONFIRMADA`, genera el voucher en S3 y encola el evento `reserva_confirmada` en SQS notifications.
+6. Si el usuario **no confirma**: tras los 900 s, el `expiry-worker` recibe el mensaje y ejecuta `UpdateItem` con `ConditionExpression = 'estado = :en_proceso'`, liberando el slot.
+7. **Idempotencia garantizada:** si el usuario pagó antes de los 15 min, la condición del paso 6 falla silenciosamente (`ConditionalCheckFailedException`) — el worker la captura y confirma el mensaje sin error ni doble actualización.
+
+---
+
+## 18. API Surface
+
+| Método | Recurso | Autenticación | Request Body (campos críticos) | Respuestas posibles |
+|---|---|---|---|---|
+| GET | `/disponibilidad/{espacioId}/{fecha}` | JWT Bearer | — | `200` lista de slots / `404` espacio no existe |
+| POST | `/reservas` | JWT Bearer | `espacio_id, usuario_id, fecha, hora_inicio` | `201` EN_PROCESO con `expires_at` / `409` slot ocupado |
+| POST | `/reservas/confirmar` | JWT Bearer | `reserva_id, usuario_id` | `200` CONFIRMADA con `voucher_url` / `410` expiró / `402` pago fallido |
+| DELETE | `/reservas/{reservaId}?usuario_id=` | JWT Bearer + ownership check | — | `200` CANCELADA con `reembolso_pct` / `403` no es el titular |
+| GET | `/reservas/usuario/{usuarioId}` | JWT Bearer + mismo usuario | — | `200` lista de reservas activas |
+| POST | `/admin/bloqueos` | JWT Bearer + rol ADMIN | `espacio_id, fecha, hora_inicio, hora_fin, motivo` | `201` bloqueo creado / `403` no es admin |
+| GET | `/admin/agenda/{complejoId}/{fecha}` | JWT Bearer + rol ADMIN | — | `200` agenda del día |
+
+**Autenticación:** JWT emitido por Cognito, validado en API Gateway mediante JWT Authorizer antes de llegar a Lambda. Lambda no valida el token — confía en que API Gateway ya lo rechazó si era inválido.
+
+**Escalado:** Lambda escala automáticamente hasta 1,000 concurrencias. API Gateway tiene un throttling por defecto de 10,000 req/s. Para el MVP (~50 reservas/día) no se requiere configuración adicional. Si se crece a múltiples complejos, se revisará en producción.
+
+---
+
+## 19. Modelo de Seguridad
+
+### 19.1 Roles IAM por Servicio
+
+| Rol | Servicio | Acciones | Resource |
+|---|---|---|---|
+| `lambda-api-exec-role` | Lambda API | dynamodb: GetItem, PutItem, UpdateItem, DeleteItem, Scan, Query | ARN exacto de la tabla + `/index/*` |
+| `lambda-api-exec-role` | Lambda API | s3: PutObject, GetObject, DeleteObject | `arn:aws:s3:::proyecto-trimestre2-itoyd-dev-storage/*` |
+| `lambda-api-exec-role` | Lambda API | sqs: SendMessage, GetQueueAttributes | ARN de notifications-queue y expiry-queue |
+| `lambda-api-exec-role` | Lambda API | logs: CreateLogGroup, CreateLogStream, PutLogEvents | ARN del log group específico de la función |
+| `worker-exec-role` | Lambda workers | sqs: ReceiveMessage, DeleteMessage, GetQueueAttributes | ARN de las colas que consume cada worker |
+| `worker-exec-role` | Lambda workers | dynamodb: UpdateItem, GetItem, Query | ARN exacto de la tabla |
+| `worker-exec-role` | Lambda workers | ses: SendEmail, SendRawEmail | `*` (SES no soporta scoping por destinatario) |
+
+Ningún rol tiene `AdministratorAccess` ni `Resource: "*"`, excepto SES por limitación del servicio.
+
+### 19.2 Autenticación
+
+JWT emitido por **Amazon Cognito User Pool**. API Gateway valida el token antes de invocar Lambda. Lambda recibe el `userId` y `rol` del contexto del request, sin re-validar. Roles: `USER` y `ADMIN`, definidos como grupos en Cognito.
+
+### 19.3 Secretos
+
+No hay secretos de base de datos (DynamoDB usa IAM roles). El único secreto es la identidad — gestionada por Cognito. No se almacenan contraseñas en el sistema.
+
+### 19.4 Cifrado
+
+- **En tránsito:** HTTPS en todos los endpoints (TLS 1.2+), certificado ACM en `grupo2.oyd.solid.com.gt`.
+- **En reposo:** DynamoDB con AWS-managed key (SSE habilitado por defecto), S3 con AES-256 (configurado en el módulo storage desde D2), SQS con SSE-SQS.
+
+---
+
+## 20. Plan de Observabilidad
+
+### 20.1 Logs Estructurados
+
+Cada invocación de Lambda emite JSON con campos: `reserva_id`, `usuario_id`, `accion`, `duracion_ms`, `estado_resultado`, `timestamp`. El `reserva_id` actúa como correlation ID para trazar una reserva a través de Lambda API → SQS → workers en CloudWatch Logs Insights.
+
+### 20.2 Métricas RED
+
+| Servicio | Rate | Errors | Duration |
+|---|---|---|---|
+| Lambda API | `Invocations` por minuto | `Errors` + `Throttles` | `Duration` p50 y p99 |
+| Lambda workers | `Invocations` por minuto | `Errors` | `Duration` p99 |
+| SQS notifications | `NumberOfMessagesSent` | `ApproximateNumberOfMessagesNotVisible` | — |
+| SQS expiry | `NumberOfMessagesSent` | `ApproximateNumberOfMessagesNotVisible` | — |
+| DynamoDB | `SuccessfulRequestLatency` | `SystemErrors` | `SuccessfulRequestLatency` p99 |
+
+### 20.3 Alarmas
+
+| Alarma | Métrica | Threshold | Ventana | Acción |
+|---|---|---|---|---|
+| `alarm-api-error-rate` | Lambda Errors / Invocations | > 1% | 15 min | SNS → email al equipo |
+| `alarm-dlq-notifications` | `ApproximateNumberOfMessagesVisible` en notifications-dlq | > 0 | 5 min | SNS → email — indica notificaciones fallidas 3 veces |
+| `alarm-dlq-expiry` | `ApproximateNumberOfMessagesVisible` en expiry-dlq | > 0 | 5 min | SNS → email — indica bloqueos optimistas no liberados |
+
+### 20.4 Comportamiento ante Degradación de DynamoDB
+
+Si DynamoDB no responde, la Lambda retorna `HTTP 503` al usuario. Los mensajes en SQS que fallen por DynamoDB caído se reintentan 3 veces automáticamente y luego van a DLQ. Las alarmas de DLQ alertan al equipo. Al recuperarse DynamoDB, se procesan manualmente los mensajes en DLQ desde la consola de AWS.
+
+---
+
+## 21. Estimado de Costo Mensual
+
+**Supuestos:** 1 complejo, ~50 reservas/día (~1,500 reservas/mes), ~5,000 invocaciones Lambda/mes (incluye consultas de disponibilidad), ambiente dev en `us-east-1`.
+
+| Servicio | Uso estimado | Costo mensual |
+|---|---|---|
+| Lambda (API + workers) | ~5,000 invocaciones × 128MB × 1s | ~$0.00 (Free Tier: 1M invocaciones gratis) |
+| DynamoDB PAY_PER_REQUEST | ~15,000 lecturas + ~5,000 escrituras | ~$0.02 |
+| S3 Standard | ~1,500 objetos × 10KB | ~$0.01 |
+| SQS | ~5,000 mensajes/mes | ~$0.00 (Free Tier: 1M mensajes gratis) |
+| API Gateway HTTP API | ~5,000 requests/mes | ~$0.00 (Free Tier: 1M requests gratis) |
+| Route 53 hosted zone | 1 zona activa | $0.50 |
+| ACM certificado | 1 certificado regional | $0.00 |
+| Amazon SES | ~1,500 emails/mes | ~$0.15 |
+| CloudWatch Logs | ~500MB logs/mes | ~$0.25 |
+| Cognito User Pool | < 50,000 MAU | $0.00 (Free Tier) |
+| **Total estimado** | | **~$0.93/mes** |
+
+**Nota:** El costo casi cero se debe al Free Tier de AWS y a las decisiones de diseño: Lambda sobre EC2/Fargate, PAY_PER_REQUEST sobre Provisioned Capacity, VPC Endpoints sobre NAT Gateway (track serverless-only elimina incluso ese costo). En producción con múltiples complejos (~500 reservas/día) el estimado sería ~$15–25/mes.
+
+---
+
+## 22. Riesgos y Decisiones Pendientes
+
+| Riesgo | Probabilidad | Impacto | Mitigación |
+|---|---|---|---|
+| Cold start de Lambda en hora pico | Media | Bajo (200–500ms extra para primer usuario) | Provisioned Concurrency en ventanas 7–9h y 17–20h si métricas muestran quejas |
+| SES en sandbox — límite de envío a emails no verificados | Alta (en dev) | Medio — emails de confirmación no llegan | Solicitar salida de sandbox antes del lanzamiento a producción |
+| DynamoDB hot partition si un espacio es muy popular | Baja | Alto — throttling en ese espacio | El partition key `ESPACIO#<id>` distribuye bien entre múltiples espacios; monitorear con CloudWatch `ThrottledRequests` |
+| Pérdida de mensajes en DLQ sin revisión | Media | Medio — notificaciones perdidas o bloqueos no liberados | Las alarmas de DLQ alertan en < 5 min; procedimiento manual documentado para redriving desde consola |
