@@ -290,8 +290,8 @@ Full output: [async-foundation.txt](evidence/async-foundation.txt)
 | 2 | CI Apply Dev | ![Apply Dev](evidence/ci-apply-dev.png) |
 | 3 | CI Apply Staging | ![Apply Staging](evidence/ci-apply-staging.png) |
 | 4 | Ruleset Config | ![Ruleset](evidence/ruleset-config.png) |
-| 5 | CI Destroy | *Pendiente — capturar de Actions → Destroy workflow* |
-| 6 | CI Drift | *Pendiente — capturar de Actions → Drift Detection run* |
+| 5 | CI Destroy | ![CI Destroy](evidence/ci-destroy.png.png) |
+| 6 | CI Drift | ![CI Drift](evidence/ci-drift.png.png) |
 | 7 | PR Blocked | *Pendiente — capturar PR con check failing* |
 
 ### Deliverable E — End-to-End Async Proof
