@@ -131,3 +131,5 @@ variable "async_consumer_timeout" {
   type        = number
   default     = 60
 }
+
+# test/cd-apply: trivial change to trigger CD pipeline
