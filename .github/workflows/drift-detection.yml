@@ -3,6 +3,7 @@ name: Drift Detection
 on:
   schedule:
     - cron: '0 6 * * 1'
+  workflow_dispatch:
 
 permissions:
   id-token: write
