@@ -256,49 +256,54 @@ curl -v -X POST -d '{"test":"delivery3-e2e"}' https://dpx91ti4dc.../dev/vouchers
 
 ### Deliverable A — Async Messaging Module
 
-**terraform output** — `infra/evidence/async-foundation.txt`
+**terraform output**
 ```
-terraform output
+module.async.outputs:
+queue_url  = "https://sqs.us-east-1.amazonaws.com/705061159333/proyecto-trimestre2-dev-reservations20260615153503761900000006"
+queue_arn  = "arn:aws:sqs:us-east-1:705061159333:proyecto-trimestre2-dev-reservations20260615153503761900000006"
+dlq_url    = "https://sqs.us-east-1.amazonaws.com/705061159333/proyecto-trimestre2-dev-reservations-dlq20260615153437704500000004"
+dlq_arn    = "arn:aws:sqs:us-east-1:705061159333:proyecto-trimestre2-dev-reservations-dlq20260615153437704500000004"
 ```
+Full output: [async-foundation.txt](evidence/async-foundation.txt)
 
 ### Deliverable B — Event-Driven Compute
 
-**terraform plan excerpt** — `infra/evidence/event-source-plan.txt`
+**Event source mapping (SQS → Lambda consumer)**
+![Event Source Mapping](evidence/event-source.png)
 
-**Console screenshot (trigger)** — `infra/evidence/event-source.png`
+**Plan excerpt:** [event-source-plan.txt](evidence/event-source-plan.txt)
 
 ### Deliverable C — Scheduled Jobs
 
-**Console screenshot** — `infra/evidence/scheduler.png`
+**EventBridge Scheduler (health-ping)**
+![Scheduler](evidence/scheduler.png)
 
-**terraform plan excerpt** — `infra/evidence/scheduler-plan.txt`
+**Plan excerpt:** [scheduler-plan.txt](evidence/scheduler-plan.txt)
 
 ### Deliverable D — Full CD Pipeline
 
-**PR plan comment** — Link al PR donde el plan se ejecutó y comentó
+**PR plan comment:** Link al PR donde el plan se ejecutó y comentó
 
-**Screenshots:**
-
-| # | File | Description |
+| # | Evidence | Screenshot |
 |---|---|---|
-| 1 | `infra/evidence/github-environments.png` | Settings → Environments: dev + staging con protection rules |
-| 2 | `infra/evidence/ci-apply-dev.png` | Apply a dev automático después del merge |
-| 3 | `infra/evidence/ci-apply-staging.png` | Apply a staging con approval gate y reviewer |
-| 4 | `infra/evidence/ci-destroy.png` | Gated destroy workflow_dispatch |
-| 5 | `infra/evidence/ci-drift.png` | Drift detection schedule run con plan output |
-| 6 | `infra/evidence/ruleset-config.png` | Ruleset Active en main con status checks |
-| 7 | `infra/evidence/ruleset-blocked-merge.png` | PR bloqueado por check failing |
+| 1 | GitHub Environments | ![Environments](evidence/github-environments.png) |
+| 2 | CI Apply Dev | ![Apply Dev](evidence/ci-apply-dev.png) |
+| 3 | CI Apply Staging | ![Apply Staging](evidence/ci-apply-staging.png) |
+| 4 | Ruleset Config | ![Ruleset](evidence/ruleset-config.png) |
+| 5 | CI Destroy | *Pendiente — capturar de Actions → Destroy workflow* |
+| 6 | CI Drift | *Pendiente — capturar de Actions → Drift Detection run* |
+| 7 | PR Blocked | *Pendiente — capturar PR con check failing* |
 
 ### Deliverable E — End-to-End Async Proof
 
-**Curl POST output** — `infra/evidence/async-enqueue.txt`
+**Curl POST output (HTTP 202 con message_id)**
 ```
-curl -v -X POST -H "Content-Type: application/json" \
-  -d '{"key": "value"}' \
-  https://dev.proyecto.grupo2.oyd.solid.com.gt/reservations/enqueue
-→ HTTP 202 {"message_id": "..."}
+{"message_id": "13405097-9b25-4044-a253-0d2bd6d6d71e", "sqs_message_id": "4d7e3f2d-c183-4bda-9fa5-a69c80704cee"}
 ```
+Full output: [async-enqueue.txt](evidence/async-enqueue.txt)
 
-**Consumer invocation log** — `infra/evidence/async-consumer.png` (CloudWatch Logs)
+**Consumer CloudWatch Logs**
+![Consumer Logs](evidence/async-consumer.png)
 
-**New object in S3** — `infra/evidence/async-object.png` (consola S3 → bucket → async/)
+**Object written to S3**
+![S3 Object](evidence/async-object.png)

@@ -55,7 +55,10 @@ resource "aws_iam_role_policy" "lambda_logs" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:log-group:/aws/lambda/${var.project_name}-${var.environment}-${var.name}:*"
+        Resource = [
+          "arn:aws:logs:*:*:log-group:/aws/lambda/${var.project_name}-${var.environment}-${var.name}:*",
+          "arn:aws:logs:*:*:log-group:/aws/lambda/${var.project_name}-${var.environment}-${var.async_consumer_name}:*"
+        ]
       }
     ]
   })

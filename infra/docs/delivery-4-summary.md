@@ -170,10 +170,11 @@ El trade-off es que con workspaces el backend S3 tiene un solo bucket con un sol
 
 ## Evidence Index
 
-| Deliverable | Evidence File |
-|---|---|
-| A — Async Messaging | `infra/evidence/async-foundation.txt` |
-| B — Event-Driven Compute | `infra/evidence/event-source-plan.txt` + `infra/evidence/event-source.png` |
-| C — Scheduled Jobs | `infra/evidence/scheduler.png` + `infra/evidence/scheduler-plan.txt` |
-| D — CD Pipeline | `infra/evidence/github-environments.png`, `ci-apply-dev.png`, `ci-apply-staging.png`, `ci-destroy.png`, `ci-drift.png`, `ruleset-config.png`, `ruleset-blocked-merge.png` |
-| E — End-to-End Async | `infra/evidence/async-enqueue.txt`, `infra/evidence/async-consumer.png`, `infra/evidence/async-object.png` |
+| Deliverable | Evidence File | Status |
+|---|---|---|
+| A — Async Messaging | `async-foundation.txt` | ✅ |
+| B — Event-Driven Compute | `event-source-plan.txt` + `event-source.png` | ✅ |
+| C — Scheduled Jobs | `scheduler.png` + `scheduler-plan.txt` | ✅ |
+| D — CD Pipeline | `github-environments.png`, `ci-apply-dev.png`, `ci-apply-staging.png`, `ruleset-config.png` | ✅ |
+| | `ci-destroy.png`, `ci-drift.png`, `ruleset-blocked-merge.png` | ❌ Pendiente |
+| E — End-to-End Async | `async-enqueue.txt`, `async-consumer.png`, `async-object.png` | ✅ |
