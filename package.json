@@ -1,0 +1,26 @@
+{
+  "name": "proyecto-trimestre2-itoyd",
+  "version": "1.0.0",
+  "description": "Este repositorio contiene el proyecto correspondiente al segundo trimestre del postgrado en diseño y desarrollo de software (PDDS).",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DouglasPrez/proyecto-trimestre2-itoyd.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/DouglasPrez/proyecto-trimestre2-itoyd/issues"
+  },
+  "homepage": "https://github.com/DouglasPrez/proyecto-trimestre2-itoyd#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@types/node": "^25.9.3"
+  }
+}
