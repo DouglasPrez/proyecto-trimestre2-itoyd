@@ -1,16 +1,8 @@
-# ---------------------------------------------------------------------------
-# Empaquetado — dos modos:
-#   1. app.zip existe (generado por App/backend/build_lambda.sh):
-#      → se despliega el backend FastAPI completo (E4+)
-#   2. app.zip no existe (fallback):
-#      → se empaqueta src/index.py solo (handler POC de E3)
-# ---------------------------------------------------------------------------
 locals {
   use_app_zip = fileexists("${path.module}/app.zip")
 }
 
 data "archive_file" "handler" {
-  # Solo se empaqueta cuando no hay app.zip precompilado
   count       = local.use_app_zip ? 0 : 1
   type        = "zip"
   output_path = "${path.module}/handler.zip"
@@ -18,108 +10,11 @@ data "archive_file" "handler" {
 }
 
 # ---------------------------------------------------------------------------
-# IAM Role
-# ---------------------------------------------------------------------------
-resource "aws_iam_role" "lambda_exec" {
-  name = "${var.project_name}-${var.environment}-${var.name}-exec-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect    = "Allow"
-        Principal = { Service = "lambda.amazonaws.com" }
-        Action    = "sts:AssumeRole"
-      }
-    ]
-  })
-
-  tags = {
-    Environment = var.environment
-    Project     = var.project_name
-  }
-}
-
-# CloudWatch Logs — scoped al log group de esta función
-resource "aws_iam_role_policy" "lambda_logs" {
-  name = "${var.project_name}-${var.environment}-${var.name}-logs-policy"
-  role = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:PutLogEvents"
-        ]
-        Resource = [
-          "arn:aws:logs:*:*:log-group:/aws/lambda/${var.project_name}-${var.environment}-${var.name}:*",
-          "arn:aws:logs:*:*:log-group:/aws/lambda/${var.project_name}-${var.environment}-${var.async_consumer_name}:*"
-        ]
-      }
-    ]
-  })
-}
-
-# D3 — DynamoDB: scoped al ARN de la tabla específica (sin wildcard)
-resource "aws_iam_role_policy" "lambda_dynamodb" {
-  name = "${var.project_name}-${var.environment}-${var.name}-dynamodb-policy"
-  role = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "DynamoDBTableAccess"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Scan",
-          "dynamodb:Query"
-        ]
-        Resource = [
-          var.dynamodb_table_arn,
-          "${var.dynamodb_table_arn}/index/*"
-        ]
-      }
-    ]
-  })
-}
-
-# D3 — S3: scoped al ARN del bucket específico (sin wildcard)
-resource "aws_iam_role_policy" "lambda_s3" {
-  name = "${var.project_name}-${var.environment}-${var.name}-s3-policy"
-  role = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "S3BucketAccess"
-        Effect = "Allow"
-        Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:DeleteObject"
-        ]
-        Resource = "${var.s3_bucket_arn}/*"
-      }
-    ]
-  })
-}
-
-# ---------------------------------------------------------------------------
-# Lambda Function
+# Lambda Function — API
 # ---------------------------------------------------------------------------
 resource "aws_lambda_function" "this" {
   function_name = "${var.project_name}-${var.environment}-${var.name}"
-  role          = aws_iam_role.lambda_exec.arn
+  role          = var.execution_role_arn
 
   filename = local.use_app_zip ? "${path.module}/app.zip" : data.archive_file.handler[0].output_path
   source_code_hash = local.use_app_zip ? try(
@@ -140,7 +35,7 @@ resource "aws_lambda_function" "this" {
       S3_BUCKET      = var.s3_bucket_name
       SECRET_KEY     = var.secret_key
       SQS_QUEUE_URL  = var.sqs_queue_url
-      # AWS_REGION es reservada — el runtime Lambda la inyecta automáticamente
+      SECRET_ARN     = var.secret_arn
     }
   }
 
@@ -152,39 +47,13 @@ resource "aws_lambda_function" "this" {
 }
 
 # ---------------------------------------------------------------------------
-# D4 — IAM SQS policy: scoped al ARN específico de la queue (sin wildcard)
-# ---------------------------------------------------------------------------
-resource "aws_iam_role_policy" "lambda_sqs" {
-  count = var.enable_async ? 1 : 0
-  name  = "${var.project_name}-${var.environment}-${var.name}-sqs-policy"
-  role  = aws_iam_role.lambda_exec.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid    = "SQSAccess"
-        Effect = "Allow"
-        Action = [
-          "sqs:SendMessage",
-          "sqs:ReceiveMessage",
-          "sqs:DeleteMessage",
-          "sqs:GetQueueAttributes"
-        ]
-        Resource = var.sqs_queue_arn
-      }
-    ]
-  })
-}
-
-# ---------------------------------------------------------------------------
-# D4 — Async Consumer Lambda (SQS-triggered worker)
+# Async Consumer Lambda — SQS-triggered worker
 # ---------------------------------------------------------------------------
 resource "aws_lambda_function" "async_consumer" {
   count = var.enable_async ? 1 : 0
 
   function_name = "${var.project_name}-${var.environment}-${var.async_consumer_name}"
-  role          = aws_iam_role.lambda_exec.arn
+  role          = var.async_consumer_execution_role_arn
 
   filename = local.use_app_zip ? "${path.module}/app.zip" : data.archive_file.handler[0].output_path
   source_code_hash = local.use_app_zip ? try(
@@ -205,6 +74,7 @@ resource "aws_lambda_function" "async_consumer" {
       S3_BUCKET      = var.s3_bucket_name
       SQS_QUEUE_URL  = var.sqs_queue_url
       SECRET_KEY     = var.secret_key
+      SECRET_ARN     = var.secret_arn
     }
   }
 
@@ -216,7 +86,7 @@ resource "aws_lambda_function" "async_consumer" {
 }
 
 # ---------------------------------------------------------------------------
-# D4 — Event Source Mapping (SQS → Async Consumer Lambda)
+# Event Source Mapping — SQS -> Async Consumer Lambda
 # ---------------------------------------------------------------------------
 resource "aws_lambda_event_source_mapping" "sqs_to_consumer" {
   count = var.enable_async ? 1 : 0

@@ -64,10 +64,11 @@ resource "aws_dynamodb_table" "reservas" {
   }
 
   # ---------------------------------------------------------------------------
-  # Encriptación en reposo con clave gestionada por AWS
+  # Encriptación en reposo — KMS CMK (D5) si kms_key_arn disponible, sino AWS managed
   # ---------------------------------------------------------------------------
   server_side_encryption {
-    enabled = true
+    enabled     = true
+    kms_key_arn = var.kms_key_arn != "" ? var.kms_key_arn : null
   }
 
   tags = {

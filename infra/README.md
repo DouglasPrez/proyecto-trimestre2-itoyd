@@ -1,8 +1,8 @@
 # Infraestructura con Terraform — proyecto-trimestre2-itoyd
 
-Esta configuración de Terraform forma parte del Delivery 1 y tiene como objetivo establecer una infraestructura mínima funcional y un pipeline de integración continua (CI) para despliegues en AWS.
+## SportSpace — Sistema de Reservas de Canchas Deportivas
 
-Este directorio contiene la configuración de Terraform que aprovisiona infraestructura en AWS para el proyecto.
+Este directorio contiene la configuración de Terraform que aprovisiona infraestructura en AWS para el proyecto SportSpace. Cubre los 5 deliveries del curso, incluyendo seguridad, observabilidad y despliegue one-click.
 
 ---
 
@@ -10,17 +10,33 @@ Este directorio contiene la configuración de Terraform que aprovisiona infraest
 
 ```
 infra/
-├── provider.tf          # Proveedor AWS y restricciones de versión de Terraform
-├── variables.tf         # Declaración de variables de entrada
-├── main.tf              # Definición de recursos
-├── outputs.tf           # Valores de salida
-├── envs/
+├── provider.tf            # Proveedor AWS y restricciones de versión
+├── backend.tf             # Backend S3 + DynamoDB para remote state
+├── variables.tf           # Variables de entrada (todos los deliveries)
+├── main.tf                # Recursos raíz y módulos (D1-D5)
+├── outputs.tf             # Valores de salida
+├── envs/                  # Configuración por ambiente
 │   ├── dev/
-│   │   └── dev.tfvars  # Valores de variables para el entorno de desarrollo
-│   └── prod/           # Valores de variables para producción (pendiente)
-├── modules/             # Módulos reutilizables (pendiente)
-└── docs/
-    └── delivery-1-summary.md
+│   │   ├── dev.tfvars
+│   │   └── backend-dev.hcl
+│   └── staging/
+│       ├── staging.tfvars
+│       └── backend-staging.hcl
+├── modules/               # Módulos reutilizables
+│   ├── iam/               # D5 — IAM Security Module
+│   ├── compute/           # D2/D4 — API Lambda + Async Consumer
+│   ├── storage/           # D2 — S3 bucket
+│   ├── database/          # D2 — DynamoDB
+│   ├── ingress/           # D3 — API Gateway HTTP API
+│   ├── network/           # D3 — DNS + Custom Domain + TLS
+│   ├── async/             # D4 — SQS + DLQ
+│   ├── scheduler/         # D4 — EventBridge Scheduler
+│   └── observability/     # D5 — CloudWatch + SNS + Dashboard + Budget
+├── seed/                  # D3 — Seed data en DynamoDB
+├── bootstrap/             # D1 — Remote state backend
+├── docs/                  # Resúmenes por delivery
+├── evidence/              # Evidencias para cada delivery
+└── README.md
 ```
 
 ---
@@ -28,227 +44,227 @@ infra/
 ## Prerrequisitos
 
 | Herramienta | Versión mínima |
-| ----------- | -------------- |
-| Terraform   | 1.8            |
-| AWS CLI     | 2.x (opcional) |
+|---|---|
+| Terraform | ~> 1.8 |
+| AWS CLI | 2.x (opcional) |
 
 ---
 
 ## Configuración de Credenciales AWS
 
-Terraform utiliza las siguientes variables de entorno para autenticarse — **nunca se deben hardcodear en el código**:
+**Importante:** Desde Delivery 5, la autenticación CI usa **OIDC federation** — no se requieren long-lived credentials. Para ejecución local:
 
 ```bash
 export AWS_ACCESS_KEY_ID="TU_ACCESS_KEY"
 export AWS_SECRET_ACCESS_KEY="TU_SECRET_KEY"
-export AWS_REGION="TU_REGION"
-```
-
-También puedes usar un perfil configurado en AWS CLI:
-
-```bash
-export AWS_PROFILE=mi-perfil
+export AWS_REGION="us-east-1"
 ```
 
 ---
 
 ## Inicializar Terraform
 
-Ejecuta el siguiente comando desde el directorio `infra/`:
-
 ```bash
 cd infra
-terraform init
-```
-
-Este comando descarga los proveedores necesarios.
-
-Para desarrollo local sin backend remoto:
-
-```bash
-terraform init -backend=false
+terraform init -backend-config=envs/dev/backend-dev.hcl
 ```
 
 ---
 
 ## Plan
 
-Previsualiza los cambios que Terraform realizará en el entorno de desarrollo:
-
 ```bash
-terraform plan -var-file="envs/dev/dev.tfvars"
+terraform plan -var-file="envs/dev/dev.tfvars" -out=tfplan-dev
 ```
-
-Este comando utiliza la configuración del entorno de desarrollo definida en `envs/dev/dev.tfvars`.
 
 ---
 
 ## Apply
 
-Aplica los cambios para crear o actualizar recursos reales en AWS:
-
 ```bash
-terraform apply -var-file="envs/dev/dev.tfvars"
+terraform apply tfplan-dev
 ```
-
-```bash
-terraform apply -var-file="envs/dev/dev.tfvars" -auto-approve
-```
-
-> Nota: Este comando crea recursos reales en AWS que pueden generar costos dependiendo del uso.
 
 ---
 
 ## Destroy
 
-Elimina todos los recursos gestionados por esta configuración:
-
 ```bash
 terraform destroy -var-file="envs/dev/dev.tfvars"
 ```
 
----
-
-## Pipeline de Integración Continua (CI)
-
-Se ha configurado un pipeline en GitHub Actions ubicado en:
-
-```
-.github/workflows/terraform-ci.yml
-```
-
-Este pipeline se ejecuta automáticamente en cada Pull Request hacia la rama `main` y realiza las siguientes validaciones:
-
-1. **Formato** — `terraform fmt --check -recursive`
-2. **Inicialización** — `terraform init -backend=false`
-3. **Validación** — `terraform validate`
-4. **Plan** — `terraform plan -var-file="envs/dev/dev.tfvars"`
-
-Además, el pipeline publica automáticamente el resultado del `terraform plan` como comentario en el Pull Request.
-
-El pipeline utiliza los siguientes secretos configurados en GitHub:
-
-* `AWS_ACCESS_KEY_ID`
-* `AWS_SECRET_ACCESS_KEY`
-* `AWS_REGION`
-
-Esto garantiza una autenticación segura sin exponer credenciales en el repositorio.
+> **Importante:** No ejecutar `terraform destroy` en `infra/bootstrap/` — el remote state es necesario.
 
 ---
 
-## Evidence
+## Runbook — Despliegue One-Click (Deliverable F)
 
-### Compute — Lambda desplegada
+### 1. Permisos de cuenta requeridos
 
-```json
-{
-    "FunctionArn": "arn:aws:lambda:us-east-1:676206925447:function:proyecto-trimestre2-itoyd-dev-api",
-    "State": "Active"
-}
+- Acceso a AWS con permisos para crear los recursos listados en `infra/docs/iac-coverage.md`
+- Presupuesto habilitado en AWS (necesario para `aws_budgets_budget`)
+- Dominio Route53 configurado: `proyecto.grupo2.oyd.solid.com.gt` (sub-delegado por instructores)
+
+### 2. GitHub Environments y Secrets
+
+| Secret | Descripción |
+|---|---|
+| `CI_RUNNER_ROLE_ARN` | ARN del rol CI creado por Terraform en el primer apply manual (`terraform output ci_runner_role_arn`) |
+
+**Entornos configurados:**
+- `dev` — sin approval gate, despliegue automático al merge a main
+- `staging` — requiere 1 approval manual después de apply en dev
+
+**Credenciales eliminadas** (ya no se usan con OIDC):
+- ~~`AWS_ACCESS_KEY_ID`~~
+- ~~`AWS_SECRET_ACCESS_KEY`~~
+- ~~`DEV_SECRET_KEY` / `STAGING_SECRET_KEY`~~
+
+### 3. Comandos para trigger el pipeline
+
+```bash
+# Clonar repositorio
+git clone https://github.com/itoyd/proyecto-trimestre2-itoyd.git
+cd proyecto-trimestre2-itoyd
+
+# (Opcional) Primera vez — hacer un primer apply manual para crear el CI runner role
+cd infra
+terraform init -backend-config=envs/dev/backend-dev.hcl
+terraform apply -var-file=envs/dev/dev.tfvars
+terraform output ci_runner_role_arn   # Copiar este ARN a GitHub Secrets
+
+# Push a main para trigger el pipeline completo
+git checkout -b feature/cambio
+echo "# cambio" >> infra/main.tf
+git add .
+git commit -m "trigger deploy"
+git push origin feature/cambio
+# Crear PR → merge a main → pipeline CD inicia automáticamente
 ```
 
-### Storage — S3 bucket desplegado
+### 4. Verificación
 
-```
-=== Versioning ===
-{                                                                                                                                                                                                                                                              
-    "Status": "Enabled"
-}
-
-=== Encryption ===
-{                                                                                                                                                                                                                                                              
-    "ServerSideEncryptionConfiguration": {
-        "Rules": [
-            {
-                "ApplyServerSideEncryptionByDefault": {
-                    "SSEAlgorithm": "AES256"
-                },
-                "BucketKeyEnabled": false
-            }
-        ]
-    }
-}
+```bash
+cd infra
+terraform output
 ```
 
-### Database — DynamoDB tabla desplegada
-
-```json
-{
-    "TableName": "proyecto-trimestre2-itoyd-dev-reservas",
-    "TableStatus": "ACTIVE",
-    "BillingMode": "PAY_PER_REQUEST",
-    "SSE": "ENABLED"
-}
-```
-
-### Remote State — Lock contention demostrado
-
-![State Lock Contention](evidence/state-lock-contention.png)
+Todos los outputs deben mostrar valores no nulos para los 7 componentes:
+- `bucket_name`, `storage_bucket_name` (storage)
+- `lambda_function_arn`, `async_consumer_function_arn` (compute)
+- `database_table_name`, `database_table_arn` (database)
+- `api_custom_endpoint`, `hosted_zone_id` (networking)
+- `async_queue_arn`, `async_dlq_arn` (async)
+- `compute_role_arn`, `ci_runner_role_arn` (security/IAM)
+- `dashboard_name`, `sns_topic_arn` (observability)
 
 ---
 
-## Evidence — Delivery 3
+## Pipeline de CI/CD
 
-### Deliverable A — Edge & DNS (serverless-only)
+### PR Validation (`pr-plan.yml`)
 
-**DNS Resolution** — Ver `infra/evidence/edge-dns.txt`
+Trigger: Pull request a `main`. Ejecuta:
+1. `terraform fmt --check -recursive`
+2. `terraform init -backend=false` + `terraform validate`
+3. `terraform plan` para dev y staging (sube artifacts)
+4. Comenta el resultado del plan en el PR
 
-**terraform output**
+### CD Apply (`cd-apply.yml`)
+
+Trigger: Push a `main`. Ejecuta en secuencia:
+1. **dev:** `terraform init` → `terraform plan` → `terraform apply`
+2. **staging:** (después de dev) `terraform init` → `terraform plan` → `terraform apply`
+
+Autenticación vía **OIDC** con `aws-actions/configure-aws-credentials@v4` asumiendo el rol `CI_RUNNER_ROLE_ARN`.
+
+### Otros workflows
+
+| Workflow | Trigger | Propósito |
+|---|---|---|
+| `destroy.yml` | `workflow_dispatch` (manual) | Destruir infraestructura de un ambiente |
+| `drift-detection.yml` | Schedule (lunes 6AM) + manual | Detectar cambios fuera de Terraform |
+
+---
+
+## Evidence — Delivery 5
+
+### Deliverable A — IAM Security Module
+
+**Roles creados:**
+- `proyecto-trimestre2-<env>-compute-role` — DynamoDB CRUD + S3 CRUD + SQS SendMessage + KMS Decrypt + SecretsManager GetSecretValue
+- `proyecto-trimestre2-<env>-async-consumer-role` — SQS ReceiveMessage/DeleteMessage/GetQueueAttributes + S3 PutObject
+- `proyecto-trimestre2-<env>-ci-runner-role` — OIDC-assumable, permisos mínimos para terraform plan/apply
+
+**Terraform plan excerpt:**
 ```
-api_custom_endpoint         = "https://grupo2.oyd.solid.com.gt"
-api_gateway_endpoint        = "https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev"
-hosted_zone_id              = "Z0165481J6MHDXNP4MB4"
-hosted_zone_name_servers    = ["ns-1154.awsdns-16.org", "ns-1941.awsdns-50.co.uk",
-                               "ns-222.awsdns-27.com", "ns-610.awsdns-12.net"]
-```
-
-### Deliverable B — Network Security (least-privilege invoker IAM)
-
-**Lambda Permission Policy** — Ver `infra/evidence/invoker-iam-policy.txt`
-```json
-{
-    "Sid": "AllowAPIGatewayInvoke",
-    "Effect": "Allow",
-    "Principal": {"Service": "apigateway.amazonaws.com"},
-    "Action": "lambda:InvokeFunction",
-    "Resource": "arn:aws:lambda:us-east-1:705061159333:function:proyecto-trimestre2-dev-api",
-    "Condition": {
-        "ArnLike": {
-            "AWS:SourceArn": "arn:aws:execute-api:us-east-1:705061159333:dpx91ti4dc/*/*"
-        }
-    }
-}
-```
-
-### Deliverable C — Public Ingress Layer
-
-**API Gateway health check** — Ver `infra/evidence/ingress-curl.txt`
-```
-curl -v https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev/
-→ 200 OK  {"status": "ok", "service": "sportspace-api"}
-```
-
-![Ingress Healthy](evidence/ingress-healthy.png)
-
-### Deliverable D — End-to-End Connectivity Proof
-
-**GET /reservations** — Ver `infra/evidence/e2e-get.txt`
-```
-curl -v https://dpx91ti4dc.execute-api.us-east-1.amazonaws.com/dev/reservations
-→ 200 OK  {"reservations": [{"reserva_id": "SEED-001", ...}], "count": 1}
+infra/evidence/iam-plan.txt
 ```
 
-**POST /vouchers** — Ver `infra/evidence/e2e-post.txt`
+### Deliverable B — Secrets Manager & KMS
+
+**terraform output:**
 ```
-curl -v -X POST -d '{"test":"delivery3-e2e"}' https://dpx91ti4dc.../dev/vouchers
-→ 201 Created  {"object_key": "vouchers/20260604T013310Z.json", "bucket": "proyecto-trimestre2-dev-storage"}
+infra/evidence/secrets-kms.txt
 ```
 
-![Screenshot S3](evidence/e2e-storage.png)
+**Secrets Manager console:**
+![Secrets Console](evidence/secrets-console.png)
 
-### Deliverable E — CI Pipeline Integration
+### Deliverable C — OIDC CI Authentication
 
-![GitHub Actions plan](evidence/ci-plan.png)
+**Secrets removed from GitHub:**
+![OIDC Secrets Removed](evidence/oidc-secrets-removed.png)
+
+**OIDC auth log in workflow run:**
+![OIDC Auth Log](evidence/oidc-auth-log.png)
+
+### Deliverable D — TLS Termination
+
+**curl HTTPS verification:**
+```
+infra/evidence/tls-curl.txt
+```
+
+### Deliverable E — Observability Module
+
+**terraform output:**
+```
+infra/evidence/observability-outputs.txt
+```
+
+**CloudWatch Dashboard:**
+![Dashboard](evidence/dashboard.png)
+
+**Cost Budget:**
+![Budget](evidence/budget.png)
+
+### Deliverable F — One-Click Deployment Proof
+
+**Clean-state pipeline run (all jobs green):**
+![Clean State Pipeline](evidence/clean-state-pipeline.png)
+
+**terraform output after successful apply:**
+```
+infra/evidence/terraform-output-full.txt
+```
+
+**Idempotency check (exit code 0):**
+```
+infra/evidence/idempotent-plan.txt
+```
+
+### Deliverable I — IaC Coverage Proof
+
+**Component-to-IaC mapping:** `infra/docs/iac-coverage.md`
+
+**terraform state list:**
+```
+infra/evidence/state-list.txt
+```
+
+**Deployed components in AWS console:**
+![Deployed Components](evidence/deployed-components.png)
 
 ---
 
@@ -258,31 +274,26 @@ curl -v -X POST -d '{"test":"delivery3-e2e"}' https://dpx91ti4dc.../dev/vouchers
 
 **terraform output**
 ```
-module.async.outputs:
-queue_url  = "https://sqs.us-east-1.amazonaws.com/705061159333/proyecto-trimestre2-dev-reservations20260615153503761900000006"
-queue_arn  = "arn:aws:sqs:us-east-1:705061159333:proyecto-trimestre2-dev-reservations20260615153503761900000006"
-dlq_url    = "https://sqs.us-east-1.amazonaws.com/705061159333/proyecto-trimestre2-dev-reservations-dlq20260615153437704500000004"
-dlq_arn    = "arn:aws:sqs:us-east-1:705061159333:proyecto-trimestre2-dev-reservations-dlq20260615153437704500000004"
+queue_url  = "https://sqs.us-east-1.amazonaws.com/705061159333/proyecto-trimestre2-dev-reservations..."
+queue_arn  = "arn:aws:sqs:us-east-1:705061159333:proyecto-trimestre2-dev-reservations..."
+dlq_url    = "https://sqs.us-east-1.amazonaws.com/705061159333/proyecto-trimestre2-dev-reservations-dlq..."
+dlq_arn    = "arn:aws:sqs:us-east-1:705061159333:proyecto-trimestre2-dev-reservations-dlq..."
 ```
 Full output: [async-foundation.txt](evidence/async-foundation.txt)
 
 ### Deliverable B — Event-Driven Compute
 
-**Event source mapping (SQS → Lambda consumer)**
 ![Event Source Mapping](evidence/event-source.png)
 
 **Plan excerpt:** [event-source-plan.txt](evidence/event-source-plan.txt)
 
 ### Deliverable C — Scheduled Jobs
 
-**EventBridge Scheduler (health-ping)**
 ![Scheduler](evidence/scheduler.png)
 
 **Plan excerpt:** [scheduler-plan.txt](evidence/scheduler-plan.txt)
 
 ### Deliverable D — Full CD Pipeline
-
-**PR plan comment:** Link al PR donde el plan se ejecutó y comentó
 
 | # | Evidence | Screenshot |
 |---|---|---|
@@ -296,14 +307,10 @@ Full output: [async-foundation.txt](evidence/async-foundation.txt)
 
 ### Deliverable E — End-to-End Async Proof
 
-**Curl POST output (HTTP 202 con message_id)**
 ```
-{"message_id": "13405097-9b25-4044-a253-0d2bd6d6d71e", "sqs_message_id": "4d7e3f2d-c183-4bda-9fa5-a69c80704cee"}
+POST /reservations/enqueue → 202 {"message_id": "13405097-9b25-4044-a253-0d2bd6d6d71e", ...}
 ```
 Full output: [async-enqueue.txt](evidence/async-enqueue.txt)
 
-**Consumer CloudWatch Logs**
 ![Consumer Logs](evidence/async-consumer.png)
-
-**Object written to S3**
 ![S3 Object](evidence/async-object.png)

@@ -19,3 +19,9 @@ variable "ttl_attribute" {
   type        = string
   default     = "expires_at"
 }
+
+variable "kms_key_arn" {
+  description = "ARN of the KMS CMK for DynamoDB SSE. If empty, defaults to AWS-managed key."
+  type        = string
+  default     = ""
+}

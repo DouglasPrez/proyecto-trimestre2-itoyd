@@ -14,8 +14,8 @@ output "invoke_arn" {
 }
 
 output "execution_role_arn" {
-  description = "ARN of the IAM execution role attached to the Lambda function."
-  value       = aws_iam_role.lambda_exec.arn
+  description = "ARN of the IAM execution role attached to the Lambda function (from IAM module)."
+  value       = var.execution_role_arn
 }
 
 # D4 — Async consumer outputs

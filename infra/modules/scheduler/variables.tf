@@ -11,11 +11,10 @@ variable "target_lambda_arn" {
 variable "scheduler_timezone" {
   description = "Timezone for the scheduler expression (e.g. America/Guatemala)."
   type        = string
-  default     = "America/Guatemala"
 }
 
 variable "environment" {
-  description = "Deployment environment name. Used for tagging."
+  description = "Deployment environment name. Used for naming."
   type        = string
 }
 
