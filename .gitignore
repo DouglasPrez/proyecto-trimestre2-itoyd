@@ -62,3 +62,11 @@ App/backend/.env
 App/backend/*.db
 App/backend/*.sqlite
 App/backend/dist/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
