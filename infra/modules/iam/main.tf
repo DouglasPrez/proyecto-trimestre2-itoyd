@@ -117,7 +117,6 @@ resource "aws_iam_role_policy" "compute_sqs" {
 
 # KMS decrypt — needed for Secrets Manager integration (D5)
 resource "aws_iam_role_policy" "compute_kms" {
-  count = var.kms_key_arn != "" ? 1 : 0
   name  = "${local.name_prefix}-compute-kms-policy"
   role  = aws_iam_role.compute.id
 
@@ -139,7 +138,6 @@ resource "aws_iam_role_policy" "compute_kms" {
 
 # Secrets Manager read — needed for runtime secret retrieval (D5)
 resource "aws_iam_role_policy" "compute_secretsmanager" {
-  count = var.secret_arn != "" ? 1 : 0
   name  = "${local.name_prefix}-compute-secretsmanager-policy"
   role  = aws_iam_role.compute.id
 

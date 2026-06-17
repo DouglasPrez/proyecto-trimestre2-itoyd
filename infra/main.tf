@@ -249,7 +249,7 @@ module "network" {
 # CloudFront — HTTP to HTTPS redirect (D5 / Deliverable D)
 # ---------------------------------------------------------------------------
 resource "aws_cloudfront_distribution" "main" {
-  count = var.redirect_http_to_https ? 1 : 0
+  count = var.redirect_http_to_https && var.enable_cloudfront ? 1 : 0
 
   enabled             = true
   is_ipv6_enabled     = true

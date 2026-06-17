@@ -207,6 +207,12 @@ variable "ssl_policy" {
   default     = "TLSv1.2_2021"
 }
 
+variable "enable_cloudfront" {
+  description = "Enable CloudFront distribution for HTTP→HTTPS redirect. Requires AWS account verification."
+  type        = bool
+  default     = false
+}
+
 variable "redirect_http_to_https" {
   description = "Enable HTTP to HTTPS redirect for public endpoints."
   type        = bool
