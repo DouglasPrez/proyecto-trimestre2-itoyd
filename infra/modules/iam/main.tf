@@ -117,8 +117,8 @@ resource "aws_iam_role_policy" "compute_sqs" {
 
 # KMS decrypt — needed for Secrets Manager integration (D5)
 resource "aws_iam_role_policy" "compute_kms" {
-  name  = "${local.name_prefix}-compute-kms-policy"
-  role  = aws_iam_role.compute.id
+  name = "${local.name_prefix}-compute-kms-policy"
+  role = aws_iam_role.compute.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -138,8 +138,8 @@ resource "aws_iam_role_policy" "compute_kms" {
 
 # Secrets Manager read — needed for runtime secret retrieval (D5)
 resource "aws_iam_role_policy" "compute_secretsmanager" {
-  name  = "${local.name_prefix}-compute-secretsmanager-policy"
-  role  = aws_iam_role.compute.id
+  name = "${local.name_prefix}-compute-secretsmanager-policy"
+  role = aws_iam_role.compute.id
 
   policy = jsonencode({
     Version = "2012-10-17"
