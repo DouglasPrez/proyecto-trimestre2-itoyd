@@ -154,7 +154,7 @@ variable "db_password" {
 variable "github_org" {
   description = "GitHub organization name for OIDC trust policy."
   type        = string
-  default     = "itoyd"
+  default     = "DouglasPrez"
 }
 
 variable "github_repo" {
