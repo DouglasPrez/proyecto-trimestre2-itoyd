@@ -325,6 +325,8 @@ resource "aws_iam_role_policy" "ci_runner_terraform" {
           "budgets:DeleteBudget",
           "budgets:TagResource",
           "budgets:UntagResource",
+          "budgets:DescribeBudget",
+          "budgets:DescribeBudgets",
           "cloudwatch:*",
           "cloudfront:CreateDistribution",
           "cloudfront:GetDistribution*",
