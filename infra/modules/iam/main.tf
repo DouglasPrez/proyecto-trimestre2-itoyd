@@ -312,6 +312,9 @@ resource "aws_iam_role_policy" "ci_runner_terraform" {
         Action = [
           "acm:DescribeCertificate",
           "acm:ListCertificates",
+          "acm:ListTagsForCertificate",
+          "route53:ListTagsForResource",
+          "budgets:ListTagsForResource",
           "acm:RequestCertificate",
           "acm:DeleteCertificate",
           "acm:AddTagsToCertificate",
