@@ -24,14 +24,15 @@ resource "aws_s3_bucket_versioning" "storage" {
 }
 
 # ---------------------------------------------------------------------------
-# Encriptación SSE-S3 — datos en reposo protegidos con AES-256
+# Encriptación SSE — KMS CMK (D5) si kms_key_arn está configurado, sino SSE-S3
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket_server_side_encryption_configuration" "storage" {
   bucket = aws_s3_bucket.storage.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = var.kms_key_arn != "" ? "aws:kms" : "AES256"
+      kms_master_key_id = var.kms_key_arn != "" ? var.kms_key_arn : null
     }
   }
 }

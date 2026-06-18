@@ -1,5 +1,10 @@
+locals {
+  api_lambda_function_name            = "${var.project_name}-${var.environment}-api"
+  async_consumer_lambda_function_name = "${var.project_name}-${var.environment}-${var.async_consumer_name}"
+}
+
 # ---------------------------------------------------------------------------
-# Bucket S3 existente del Delivery 1
+# S3 Bucket existente del Delivery 1
 # ---------------------------------------------------------------------------
 resource "aws_s3_bucket" "main" {
   bucket = var.bucket_name
@@ -11,8 +16,169 @@ resource "aws_s3_bucket" "main" {
 }
 
 # ---------------------------------------------------------------------------
-# Módulo de Cómputo — Lambda (Delivery 2 / Entregable A)
-# Actualizado en D3: se agregan env vars de DynamoDB, S3 y permisos IAM
+# KMS Customer-Managed Key (D5 / Deliverable B)
+# Policy scoped to: root account (admin), compute execution role, Secrets Manager service
+# ---------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+resource "aws_kms_key" "main" {
+  description             = "${var.project_name} ${var.environment} CMK for S3, DynamoDB, and Secrets Manager"
+  deletion_window_in_days = 7
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "EnableIAMAdminAccess"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowComputeRoleUsage"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-${var.environment}-compute-role"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowSecretsManagerUsage"
+        Effect = "Allow"
+        Principal = {
+          Service = "secretsmanager.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "secretsmanager.${var.region}.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "aws_kms_alias" "main" {
+  name          = var.kms_key_alias
+  target_key_id = aws_kms_key.main.key_id
+}
+
+# ---------------------------------------------------------------------------
+# Secrets Manager — JWT signing key (D5 / Deliverable B)
+# ---------------------------------------------------------------------------
+resource "aws_secretsmanager_secret" "jwt_secret" {
+  name        = var.db_secret_name
+  description = "JWT signing key for SportSpace API"
+  kms_key_id  = aws_kms_key.main.arn
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret.id
+  secret_string = var.db_password
+}
+
+# ---------------------------------------------------------------------------
+# OIDC Provider — GitHub Actions (D5 / Deliverable C)
+# ---------------------------------------------------------------------------
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Módulo IAM (D5 / Deliverable A)
+# ---------------------------------------------------------------------------
+module "iam" {
+  source = "./modules/iam"
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  dynamodb_table_arn           = module.database.table_arn
+  storage_bucket_arn           = module.storage.bucket_arn
+  async_queue_arn              = module.async.queue_arn
+  compute_log_group_arn        = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.api_lambda_function_name}:*"
+  async_consumer_log_group_arn = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.async_consumer_lambda_function_name}:*"
+
+  kms_key_arn = aws_kms_key.main.arn
+  secret_arn  = aws_secretsmanager_secret.jwt_secret.arn
+
+  oidc_provider_arn  = aws_iam_openid_connect_provider.github.arn
+  github_org         = var.github_org
+  github_repo        = var.github_repo
+  tfstate_bucket_arn = "arn:aws:s3:::proyecto-trimestre2-v2-tfstate"
+  tflock_table_arn   = "arn:aws:dynamodb:us-east-1:*:table/proyecto-trimestre2-v2-tflock"
+}
+
+# ---------------------------------------------------------------------------
+# Módulo de Almacenamiento — S3 (D2 / D5: upgraded to KMS encryption)
+# ---------------------------------------------------------------------------
+module "storage" {
+  source = "./modules/storage"
+
+  environment                = var.environment
+  project_name               = var.project_name
+  bucket_name                = var.project_name
+  lifecycle_prefix           = "vouchers/"
+  transition_days            = 30
+  noncurrent_expiration_days = 90
+  kms_key_arn                = aws_kms_key.main.arn
+}
+
+# ---------------------------------------------------------------------------
+# Módulo de Base de Datos — DynamoDB (D2 / D5: upgraded to KMS encryption)
+# ---------------------------------------------------------------------------
+module "database" {
+  source = "./modules/database"
+
+  environment   = var.environment
+  project_name  = var.project_name
+  billing_mode  = "PAY_PER_REQUEST"
+  ttl_attribute = "expires_at"
+  kms_key_arn   = aws_kms_key.main.arn
+}
+
+# ---------------------------------------------------------------------------
+# Seed Data — D3 / Deliverable D
+# ---------------------------------------------------------------------------
+module "seed" {
+  source = "./seed"
+
+  dynamodb_table_name = module.database.table_name
+}
+
+# ---------------------------------------------------------------------------
+# Módulo de Cómputo — Lambda (D2 / D5: IAM roles from module)
 # ---------------------------------------------------------------------------
 module "compute" {
   source = "./modules/compute"
@@ -30,6 +196,13 @@ module "compute" {
   dynamodb_table_arn  = module.database.table_arn
   s3_bucket_arn       = module.storage.bucket_arn
 
+  # D5 — IAM role ARNs from IAM module
+  execution_role_arn                = module.iam.compute_role_arn
+  async_consumer_execution_role_arn = module.iam.async_consumer_role_arn
+
+  # D5 — Secrets Manager ARN
+  secret_arn = aws_secretsmanager_secret.jwt_secret.arn
+
   # D4 — SQS integration
   sqs_queue_url                            = module.async.queue_url
   sqs_queue_arn                            = module.async.queue_arn
@@ -43,42 +216,7 @@ module "compute" {
 }
 
 # ---------------------------------------------------------------------------
-# Módulo de Almacenamiento — S3 (Delivery 2 / Entregable B)
-# ---------------------------------------------------------------------------
-module "storage" {
-  source = "./modules/storage"
-
-  environment                = var.environment
-  project_name               = var.project_name
-  bucket_name                = var.project_name
-  lifecycle_prefix           = "vouchers/"
-  transition_days            = 30
-  noncurrent_expiration_days = 90
-}
-
-# ---------------------------------------------------------------------------
-# Módulo de Base de Datos — DynamoDB (Delivery 2 / Entregable C)
-# ---------------------------------------------------------------------------
-module "database" {
-  source = "./modules/database"
-
-  environment   = var.environment
-  project_name  = var.project_name
-  billing_mode  = "PAY_PER_REQUEST"
-  ttl_attribute = "expires_at"
-}
-
-# ---------------------------------------------------------------------------
-# Seed Data — Delivery 3 / Deliverable D
-# ---------------------------------------------------------------------------
-module "seed" {
-  source = "./seed"
-
-  dynamodb_table_name = module.database.table_name
-}
-
-# ---------------------------------------------------------------------------
-# Módulo de Ingress — API Gateway HTTP API (Delivery 3 / Deliverable C)
+# Módulo de Ingress — API Gateway HTTP API (D3 / Deliverable C)
 # ---------------------------------------------------------------------------
 module "ingress" {
   source = "./modules/ingress"
@@ -91,7 +229,7 @@ module "ingress" {
 }
 
 # ---------------------------------------------------------------------------
-# Módulo de Red — DNS + Custom Domain (Delivery 3 / Deliverable A + B)
+# Módulo de Red — DNS + Custom Domain + TLS (D3 / D5: CloudFront redirect)
 # ---------------------------------------------------------------------------
 module "network" {
   source = "./modules/network"
@@ -108,7 +246,67 @@ module "network" {
 }
 
 # ---------------------------------------------------------------------------
-# Módulo de Scheduled Jobs (Delivery 4 / Deliverable C)
+# CloudFront — HTTP to HTTPS redirect (D5 / Deliverable D)
+# ---------------------------------------------------------------------------
+resource "aws_cloudfront_distribution" "main" {
+  count = var.redirect_http_to_https && var.enable_cloudfront ? 1 : 0
+
+  enabled             = true
+  is_ipv6_enabled     = true
+  comment             = "${var.project_name} ${var.environment} — HTTP→HTTPS redirect"
+  default_root_object = ""
+  price_class         = "PriceClass_100"
+
+  origin {
+    domain_name = "${module.ingress.api_id}.execute-api.${var.region}.amazonaws.com"
+    origin_id   = "api-gateway-${var.environment}"
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  default_cache_behavior {
+    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "api-gateway-${var.environment}"
+
+    viewer_protocol_policy = "redirect-to-https"
+
+    forwarded_values {
+      query_string = true
+      headers      = ["*"]
+      cookies {
+        forward = "all"
+      }
+    }
+
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Módulo de Scheduled Jobs (D4 / Deliverable C)
 # ---------------------------------------------------------------------------
 module "scheduler" {
   source = "./modules/scheduler"
@@ -121,7 +319,7 @@ module "scheduler" {
 }
 
 # ---------------------------------------------------------------------------
-# Módulo Async — SQS + DLQ (Delivery 4 / Deliverable A)
+# Módulo Async — SQS + DLQ (D4 / Deliverable A)
 # ---------------------------------------------------------------------------
 module "async" {
   source = "./modules/async"
@@ -135,3 +333,26 @@ module "async" {
   project_name                  = var.project_name
 }
 
+# ---------------------------------------------------------------------------
+# Módulo de Observabilidad (D5 / Deliverable E)
+# ---------------------------------------------------------------------------
+module "observability" {
+  source = "./modules/observability"
+
+  environment  = var.environment
+  project_name = var.project_name
+
+  api_lambda_function_name            = local.api_lambda_function_name
+  async_consumer_lambda_function_name = local.async_consumer_lambda_function_name
+
+  log_retention_days = var.log_retention_days
+
+  alarm_error_threshold    = var.alarm_error_threshold
+  alarm_evaluation_periods = var.alarm_evaluation_periods
+  alarm_period_seconds     = var.alarm_period_seconds
+  notification_email       = var.notification_email
+
+  monthly_budget_usd = var.monthly_budget_usd
+
+  api_endpoint_url = module.ingress.api_endpoint
+}

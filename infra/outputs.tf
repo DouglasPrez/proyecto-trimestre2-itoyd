@@ -38,7 +38,6 @@ output "database_table_arn" {
   value       = module.database.table_arn
 }
 
-# D3 — nuevos outputs
 output "api_gateway_endpoint" {
   description = "Default API Gateway endpoint URL (before custom domain)."
   value       = module.ingress.api_endpoint
@@ -103,4 +102,65 @@ output "async_consumer_function_arn" {
 output "async_consumer_function_name" {
   description = "Name of the async consumer Lambda function."
   value       = module.compute.async_consumer_function_name
+}
+
+# D5 — KMS
+output "kms_key_arn" {
+  description = "ARN of the KMS customer-managed key (CMK)."
+  value       = aws_kms_key.main.arn
+}
+
+output "kms_key_id" {
+  description = "ID of the KMS customer-managed key (CMK)."
+  value       = aws_kms_key.main.key_id
+}
+
+# D5 — Secrets Manager
+output "jwt_secret_arn" {
+  description = "ARN of the Secrets Manager JWT signing secret."
+  value       = aws_secretsmanager_secret.jwt_secret.arn
+}
+
+# D5 — IAM
+output "compute_role_arn" {
+  description = "ARN of the compute Lambda execution role."
+  value       = module.iam.compute_role_arn
+}
+
+output "async_consumer_role_arn" {
+  description = "ARN of the async consumer Lambda execution role."
+  value       = module.iam.async_consumer_role_arn
+}
+
+output "ci_runner_role_arn" {
+  description = "ARN of the OIDC-assumable CI runner role."
+  value       = module.iam.ci_runner_role_arn
+}
+
+# D5 — OIDC
+output "oidc_provider_arn" {
+  description = "ARN of the GitHub Actions OIDC provider."
+  value       = aws_iam_openid_connect_provider.github.arn
+}
+
+# D5 — TLS
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain name for HTTP→HTTPS redirect."
+  value       = try(aws_cloudfront_distribution.main[0].domain_name, null)
+}
+
+# D5 — Observability
+output "dashboard_name" {
+  description = "Name of the CloudWatch dashboard."
+  value       = module.observability.dashboard_name
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for alarm notifications."
+  value       = module.observability.sns_topic_arn
+}
+
+output "budget_name" {
+  description = "Name of the monthly cost budget."
+  value       = module.observability.budget_name
 }

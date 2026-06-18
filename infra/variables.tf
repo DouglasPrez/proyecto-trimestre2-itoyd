@@ -32,7 +32,7 @@ variable "lambda_timeout" {
   default     = 30
 }
 
-# D3 — nuevas variables
+# D3 — Custom domain
 variable "domain_name" {
   description = "Custom domain name for the SportSpace API (e.g. api.sportspace.example.com)."
   type        = string
@@ -81,7 +81,6 @@ variable "async_dlq_message_retention_seconds" {
   default     = 1209600
 }
 
-# D4 — Event source mapping variables
 variable "event_batch_size" {
   description = "Maximum number of records to retrieve per Lambda invocation."
   type        = number
@@ -100,7 +99,6 @@ variable "event_bisect_batch_on_function_error" {
   default     = false
 }
 
-# D4 — Scheduler variables
 variable "scheduler_schedule_expression" {
   description = "Cron or rate expression for the EventBridge Scheduler."
   type        = string
@@ -113,7 +111,6 @@ variable "scheduler_timezone" {
   default     = "America/Guatemala"
 }
 
-# D4 — Async consumer variables
 variable "async_consumer_name" {
   description = "Base name for the async consumer Lambda function."
   type        = string
@@ -130,4 +127,94 @@ variable "async_consumer_timeout" {
   description = "Timeout in seconds for the async consumer Lambda."
   type        = number
   default     = 60
+}
+
+# D5 — KMS
+variable "kms_key_alias" {
+  description = "Alias for the KMS customer-managed key (CMK)."
+  type        = string
+  default     = "alias/sportspace-cmk"
+}
+
+# D5 — Secrets Manager
+variable "db_secret_name" {
+  description = "Name of the Secrets Manager secret for the JWT signing key."
+  type        = string
+  default     = "sportspace-jwt-secret"
+}
+
+variable "db_password" {
+  description = "JWT signing secret value stored in Secrets Manager. Sensitive — do NOT commit in .tfvars."
+  type        = string
+  sensitive   = true
+  default     = "sportspace-dev-secret-change-in-production-2026"
+}
+
+# D5 — OIDC
+variable "github_org" {
+  description = "GitHub organization name for OIDC trust policy."
+  type        = string
+  default     = "DouglasPrez"
+}
+
+variable "github_repo" {
+  description = "GitHub repository name for OIDC trust policy."
+  type        = string
+  default     = "proyecto-trimestre2-itoyd"
+}
+
+# D5 — Observability
+variable "notification_email" {
+  description = "Email address for SNS alarm notifications."
+  type        = string
+  default     = "admin@sportspace.com"
+}
+
+variable "monthly_budget_usd" {
+  description = "Monthly cost budget limit in USD."
+  type        = number
+  default     = 50
+}
+
+variable "log_retention_days" {
+  description = "Number of days to retain CloudWatch log group data."
+  type        = number
+  default     = 14
+}
+
+variable "alarm_error_threshold" {
+  description = "Threshold for API 5XX error count alarm."
+  type        = number
+  default     = 5
+}
+
+variable "alarm_evaluation_periods" {
+  description = "Number of evaluation periods for metric alarms."
+  type        = number
+  default     = 2
+}
+
+variable "alarm_period_seconds" {
+  description = "Period in seconds for metric alarm evaluation."
+  type        = number
+  default     = 300
+}
+
+# D5 — TLS
+variable "ssl_policy" {
+  description = "SSL security policy for CloudFront and API Gateway."
+  type        = string
+  default     = "TLSv1.2_2021"
+}
+
+variable "enable_cloudfront" {
+  description = "Enable CloudFront distribution for HTTP→HTTPS redirect. Requires AWS account verification."
+  type        = bool
+  default     = false
+}
+
+variable "redirect_http_to_https" {
+  description = "Enable HTTP to HTTPS redirect for public endpoints."
+  type        = bool
+  default     = true
 }

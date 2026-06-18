@@ -26,11 +26,9 @@ resource "aws_iam_role_policy" "scheduler_invoke" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "InvokeLambda"
-        Effect = "Allow"
-        Action = [
-          "lambda:InvokeFunction"
-        ]
+        Sid      = "InvokeLambda"
+        Effect   = "Allow"
+        Action   = ["lambda:InvokeFunction"]
         Resource = var.target_lambda_arn
       }
     ]

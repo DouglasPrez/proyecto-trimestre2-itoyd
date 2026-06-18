@@ -30,3 +30,9 @@ variable "noncurrent_expiration_days" {
   type        = number
   default     = 90
 }
+
+variable "kms_key_arn" {
+  description = "ARN of the KMS CMK for S3 SSE encryption. If empty, defaults to SSE-S3 (AES256)."
+  type        = string
+  default     = ""
+}

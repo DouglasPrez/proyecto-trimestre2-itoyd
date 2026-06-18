@@ -18,23 +18,24 @@ permissions:
 env:
   TF_VERSION: 1.8.5
   TF_INFRA_DIR: infra
+  AWS_REGION: us-east-1
 
 jobs:
   destroy:
     runs-on: ubuntu-latest
-    # Corregido: Esto le dice a GitHub qué entorno usar dinámicamente
     environment: ${{ github.event.inputs.environment }}
     defaults:
       run:
         working-directory: ${{ env.TF_INFRA_DIR }}
-    env:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: us-east-1
-      # Corregido: Elige dinámicamente el secreto correcto según tu elección
-      TF_VAR_secret_key: ${{ github.event.inputs.environment == 'dev' && secrets.DEV_SECRET_KEY || secrets.STAGING_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.CI_RUNNER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
