@@ -71,6 +71,7 @@ class SpaceResponse(SpaceBase):
     id: int
     complex_id: int
     is_active: bool
+    complex_name: Optional[str] = None
 
 
 # ── Availability ─────────────────────────────────────────────────────────────

@@ -69,6 +69,10 @@ class Space(Base):
     reservations = relationship("Reservation", back_populates="space")
     blocks = relationship("Block", back_populates="space")
 
+    @property
+    def complex_name(self) -> "str | None":
+        return self.complex.name if self.complex else None
+
 
 class Reservation(Base):
     __tablename__ = "reservations"

@@ -51,10 +51,12 @@ export default function VoucherPage() {
             <span className="text-gray-500">Código</span>
             <span className="font-mono font-bold text-blue-700">{reservation.reservation_code}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-gray-500">Complejo</span>
-            <span className="font-medium">{space?.name ? space.name : '—'}</span>
-          </div>
+          {space?.complex_name && (
+            <div className="flex justify-between">
+              <span className="text-gray-500">Complejo</span>
+              <span className="font-medium">{space.complex_name}</span>
+            </div>
+          )}
           {space && (
             <div className="flex justify-between">
               <span className="text-gray-500">Cancha</span>

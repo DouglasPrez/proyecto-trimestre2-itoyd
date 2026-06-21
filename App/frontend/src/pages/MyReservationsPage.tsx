@@ -28,7 +28,9 @@ function ReservationCard({ res }: { res: Reservation }) {
             <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>
           </div>
           <p className="font-medium text-gray-800">{res.space?.name ?? '—'}</p>
-          <p className="text-sm text-gray-500">{res.space ? '' : ''}</p>
+          {res.space?.complex_name && (
+            <p className="text-sm text-gray-500">{res.space.complex_name}</p>
+          )}
           <p className="text-sm text-gray-600 mt-1">
             {format(start, "EEE d 'de' MMM yyyy", { locale: es })} · {format(start, 'HH:mm')}–{format(end, 'HH:mm')}
           </p>

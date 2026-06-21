@@ -53,6 +53,7 @@ export interface Space {
   cancel_free_hours: number
   cancel_penalty_pct: number
   cancel_no_refund_hours: number
+  complex_name?: string | null
 }
 
 export interface TimeSlot {

@@ -8,6 +8,7 @@ from ..database import get_db
 from .. import models, schemas
 from ..auth import get_current_user
 from ..aws.s3 import upload_voucher, get_voucher_presigned_url
+from ..aws.sqs import publish_expiry, publish_notification
 from ..aws.voucher import build_voucher_html
 
 router = APIRouter(prefix="/reservations", tags=["reservations"])
@@ -100,6 +101,9 @@ def create_reservation(
     db.commit()
     db.refresh(reservation)
 
+    # Enqueue expiry message (delay 900 s = 15 min) — fire-and-forget
+    publish_expiry(reservation.id, space.id)
+
     return reservation
 
 
@@ -177,6 +181,16 @@ def confirm_reservation(
     )
     upload_voucher(reservation.reservation_code, html)
 
+    # Enqueue confirmation notification — fire-and-forget
+    publish_notification(
+        event_type="reserva_confirmada",
+        reserva_id=reservation.id,
+        usuario_email=current_user.email,
+        fecha=reservation.start_time.strftime("%Y-%m-%d"),
+        hora_inicio=reservation.start_time.strftime("%H:%M"),
+        codigo=reservation.reservation_code,
+    )
+
     return reservation
 
 
@@ -205,6 +219,17 @@ def cancel_reservation(
     reservation.refund_amount = refund
     db.commit()
     db.refresh(reservation)
+
+    # Enqueue cancellation notification — fire-and-forget
+    publish_notification(
+        event_type="reserva_cancelada",
+        reserva_id=reservation.id,
+        usuario_email=current_user.email,
+        fecha=reservation.start_time.strftime("%Y-%m-%d"),
+        hora_inicio=reservation.start_time.strftime("%H:%M"),
+        codigo=reservation.reservation_code,
+    )
+
     return reservation
 
 
