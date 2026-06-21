@@ -7,6 +7,7 @@ import calendar
 from ..database import get_db
 from .. import models, schemas
 from ..auth import require_admin
+from ..aws.sqs import publish_notification
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -98,6 +99,18 @@ def create_block(
     if not space or space.complex_id != current_user.complex_id:
         raise HTTPException(status_code=403, detail="Sin permiso sobre ese espacio")
 
+    # Notify users with CONFIRMED reservations that overlap with the block
+    affected = (
+        db.query(models.Reservation)
+        .filter(
+            models.Reservation.space_id == body.space_id,
+            models.Reservation.status == models.ReservationStatus.CONFIRMED,
+            models.Reservation.start_time < body.end_time,
+            models.Reservation.end_time > body.start_time,
+        )
+        .all()
+    )
+
     block = models.Block(
         space_id=body.space_id,
         start_time=body.start_time,
@@ -109,6 +122,17 @@ def create_block(
     db.add(block)
     db.commit()
     db.refresh(block)
+
+    for res in affected:
+        publish_notification(
+            event_type="bloqueo_notificado",
+            reserva_id=res.id,
+            usuario_email=res.user.email,
+            fecha=res.start_time.strftime("%Y-%m-%d"),
+            hora_inicio=res.start_time.strftime("%H:%M"),
+            codigo=res.reservation_code,
+        )
+
     return block
 
 

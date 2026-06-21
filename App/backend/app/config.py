@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     s3_voucher_prefix: str = "vouchers"
     # Injected by Lambda env var DYNAMODB_TABLE (set by Terraform compute module)
     dynamodb_table: str = ""
+    # SQS queues — injected by Terraform compute module as env vars
+    sqs_notifications_queue_url: str = ""
+    sqs_expiry_queue_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
