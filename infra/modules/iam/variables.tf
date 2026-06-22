@@ -19,7 +19,12 @@ variable "storage_bucket_arn" {
 }
 
 variable "async_queue_arn" {
-  description = "ARN of the async SQS queue. Scopes compute (SendMessage) and async consumer (ReceiveMessage/DeleteMessage/GetQueueAttributes) permissions."
+  description = "ARN of the async SQS queue (expiry). Scopes compute (SendMessage) and async consumer (ReceiveMessage/DeleteMessage/GetQueueAttributes) permissions."
+  type        = string
+}
+
+variable "async_notifications_queue_arn" {
+  description = "ARN of the notifications SQS queue. Scopes compute (SendMessage) and async consumer (ReceiveMessage/DeleteMessage/GetQueueAttributes) permissions."
   type        = string
 }
 

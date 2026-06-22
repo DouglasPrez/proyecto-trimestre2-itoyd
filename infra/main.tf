@@ -125,11 +125,12 @@ module "iam" {
   environment  = var.environment
   project_name = var.project_name
 
-  dynamodb_table_arn           = module.database.table_arn
-  storage_bucket_arn           = module.storage.bucket_arn
-  async_queue_arn              = module.async.queue_arn
-  compute_log_group_arn        = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.api_lambda_function_name}:*"
-  async_consumer_log_group_arn = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.async_consumer_lambda_function_name}:*"
+  dynamodb_table_arn            = module.database.table_arn
+  storage_bucket_arn            = module.storage.bucket_arn
+  async_queue_arn               = module.async.queue_arn
+  async_notifications_queue_arn = module.async_notifications.queue_arn
+  compute_log_group_arn         = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.api_lambda_function_name}:*"
+  async_consumer_log_group_arn  = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.async_consumer_lambda_function_name}:*"
 
   kms_key_arn = aws_kms_key.main.arn
   secret_arn  = aws_secretsmanager_secret.jwt_secret.arn
@@ -207,6 +208,8 @@ module "compute" {
   # D4 — SQS integration
   sqs_queue_url                            = module.async.queue_url
   sqs_queue_arn                            = module.async.queue_arn
+  sqs_notifications_queue_url              = module.async_notifications.queue_url
+  sqs_notifications_queue_arn              = module.async_notifications.queue_arn
   async_consumer_name                      = var.async_consumer_name
   async_consumer_memory_size               = var.async_consumer_memory_size
   async_consumer_timeout                   = var.async_consumer_timeout
@@ -334,6 +337,20 @@ module "async" {
   project_name                  = var.project_name
 }
 
+# Cola separada de notificaciones (documento maestro §13 — Flujo 1).
+# Mismo worker (async_consumer) la consume además de la cola de reservas/expiry.
+module "async_notifications" {
+  source = "./modules/async"
+
+  queue_name_prefix             = "${var.project_name}-${var.environment}-notifications"
+  visibility_timeout_seconds    = var.async_visibility_timeout_seconds
+  message_retention_seconds     = var.async_message_retention_seconds
+  max_receive_count             = var.async_max_receive_count
+  dlq_message_retention_seconds = var.async_dlq_message_retention_seconds
+  environment                   = var.environment
+  project_name                  = var.project_name
+}
+
 # ---------------------------------------------------------------------------
 # Módulo de Observabilidad (D5 / Deliverable E)
 # ---------------------------------------------------------------------------
@@ -345,6 +362,7 @@ module "observability" {
 
   api_lambda_function_name            = local.api_lambda_function_name
   async_consumer_lambda_function_name = local.async_consumer_lambda_function_name
+  notifications_dlq_name              = module.async_notifications.dlq_name
 
   log_retention_days = var.log_retention_days
 
