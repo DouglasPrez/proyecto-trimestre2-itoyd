@@ -125,12 +125,12 @@ module "iam" {
   environment  = var.environment
   project_name = var.project_name
 
-  dynamodb_table_arn           = module.database.table_arn
-  storage_bucket_arn           = module.storage.bucket_arn
+  dynamodb_table_arn            = module.database.table_arn
+  storage_bucket_arn            = module.storage.bucket_arn
   async_queue_arn               = module.async.queue_arn
   async_notifications_queue_arn = module.async_notifications.queue_arn
-  compute_log_group_arn        = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.api_lambda_function_name}:*"
-  async_consumer_log_group_arn = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.async_consumer_lambda_function_name}:*"
+  compute_log_group_arn         = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.api_lambda_function_name}:*"
+  async_consumer_log_group_arn  = "arn:aws:logs:*:*:log-group:/aws/lambda/${local.async_consumer_lambda_function_name}:*"
 
   kms_key_arn = aws_kms_key.main.arn
   secret_arn  = aws_secretsmanager_secret.jwt_secret.arn

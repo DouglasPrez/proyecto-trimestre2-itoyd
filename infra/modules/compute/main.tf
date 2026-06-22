@@ -29,15 +29,15 @@ resource "aws_lambda_function" "this" {
 
   environment {
     variables = {
-      ENVIRONMENT                  = var.environment
-      PROJECT_NAME                 = var.project_name
-      DYNAMODB_TABLE               = var.dynamodb_table_name
-      S3_BUCKET                    = var.s3_bucket_name
-      SECRET_KEY                   = var.secret_key
-      SQS_QUEUE_URL                = var.sqs_queue_url
-      SQS_NOTIFICATIONS_QUEUE_URL  = var.sqs_notifications_queue_url
-      SQS_EXPIRY_QUEUE_URL         = var.sqs_queue_url
-      SECRET_ARN                   = var.secret_arn
+      ENVIRONMENT                 = var.environment
+      PROJECT_NAME                = var.project_name
+      DYNAMODB_TABLE              = var.dynamodb_table_name
+      S3_BUCKET                   = var.s3_bucket_name
+      SECRET_KEY                  = var.secret_key
+      SQS_QUEUE_URL               = var.sqs_queue_url
+      SQS_NOTIFICATIONS_QUEUE_URL = var.sqs_notifications_queue_url
+      SQS_EXPIRY_QUEUE_URL        = var.sqs_queue_url
+      SECRET_ARN                  = var.secret_arn
     }
   }
 
