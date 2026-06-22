@@ -6,6 +6,7 @@ locals {
 # ---------------------------------------------------------------------------
 # S3 Bucket existente del Delivery 1
 # ---------------------------------------------------------------------------
+# v2 — one-click deployment proof trigger
 resource "aws_s3_bucket" "main" {
   bucket = var.bucket_name
 
