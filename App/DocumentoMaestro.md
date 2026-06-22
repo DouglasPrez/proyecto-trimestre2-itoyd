@@ -429,6 +429,8 @@ Decidimos implementar **AWS DynamoDB** (base de datos NoSQL gestionada) utilizan
 2. **UC-03 (Consultar mis reservas):** Creamos un segundo GSI llamado `usuario-fecha-index` para poder recuperar todo el historial y reservas futuras de un deportista en particular.
 3. **Reserva atómica y expiración:** Implementamos el atributo `expires_at` que hace uso de la funcionalidad TTL (Time-to-Live) nativa de DynamoDB. Esto nos permite eliminar automáticamente las reservas temporales (lock optimista) si el usuario no concreta el pago en 15 minutos.
 
+**Nota de implementación:** la tabla, ambos GSIs y el TTL están desplegados y activos en AWS (`proyecto-trimestre2-dev-reservas`) como parte del deliverable de infraestructura. Sin embargo, la lógica de negocio de la app (`App/backend`) corre sobre **SQLite/SQLAlchemy**, no contra esta tabla — son dos pistas paralelas: la infraestructura DynamoDB demuestra el patrón de acceso diseñado en esta sección, mientras que la app real (login, reservas, cancelaciones) usa el modelo relacional local. Unificarlas es trabajo pendiente si el proyecto pasa de MVP académico a producción.
+
 ### 10.2 Almacenamiento de Objetos (Amazon S3)
 * Para cada reserva pagada y confirmada, el sistema genera un **voucher o comprobante** en formato documento/imagen. Decidimos guardar estos datos inmutables en un bucket de **Amazon S3** con reglas de ciclo de vida (vouchers/prefix), segregando claramente los datos estructurados transaccionales de los archivos estáticos.
 
@@ -587,8 +589,8 @@ flowchart TD
 |-------|-------|
 | **Tipo** | Comando |
 | **Productor** | Lambda API |
-| **Cola** | `{project}-{env}-notifications` (SQS Standard) |
-| **Consumidor** | Lambda `notifications-worker` |
+| **Cola** | `{project}-{env}-notifications` (SQS Standard, desplegada como cola independiente de `{project}-{env}-reservations`) |
+| **Consumidor** | Lambda `async-consumer` (worker compartido — en este entorno dev procesa ambas colas; el `notifications-worker` dedicado con envío real a SES queda pendiente, ver §22) |
 | **Visibility timeout** | 60 s (mayor que el timeout del worker de 30 s) |
 | **Manejo de fallos** | `maxReceiveCount = 3` → DLQ con retención 14 días |
 
@@ -617,21 +619,20 @@ flowchart TD
 |-------|-------|
 | **Tipo** | Comando |
 | **Productor** | Lambda API (al crear reserva en estado `EN_PROCESO`) |
-| **Cola** | `{project}-{env}-expiry` (SQS Standard, `delay_seconds = 900`) |
-| **Consumidor** | Lambda `expiry-worker` |
-| **Manejo de fallos** | `maxReceiveCount = 3` → DLQ con retención 24 h |
+| **Cola** | `{project}-{env}-reservations` (SQS Standard, `delay_seconds = 900` aplicado en `publish_expiry`) — diseñada como cola `expiry` independiente; en este entorno dev comparte la cola de reservas en vez de tener su propia cola dedicada |
+| **Consumidor** | Diseñado como Lambda `expiry-worker` dedicado con `ConditionExpression`. **No implementado en dev:** la expiración real del bloqueo optimista la resuelve `_expire_pending()` de forma síncrona/perezosa en `App/backend/app/routes/reservations.py`, evaluada en cada request — no hay un worker asíncrono escuchando esta cola. Ver riesgo en §22. |
+| **Manejo de fallos** | `maxReceiveCount = 5` → DLQ con retención 14 días (config real desplegada, ver `infra/modules/async`) |
 
-**Payload — campos críticos:**
+**Payload — campos críticos (real, `app/aws/sqs.py:publish_expiry`):**
 
 ```json
 {
-  "PK": "RESERVA#<complejo_id>",
-  "SK": "SLOT#<fecha>#<hora>#<espacio_id>",
-  "reserva_id": "<uuid>"
+  "reserva_id": "<int>",
+  "space_id": "<int>"
 }
 ```
 
-**Idempotencia:** El worker ejecuta un `UpdateItem` con `ConditionExpression = 'estado = :en_proceso'`. Si el usuario completó el pago antes de los 15 min, el estado ya cambió a `CONFIRMADA` y la condición falla silenciosamente: DynamoDB retorna `ConditionalCheckFailedException`, el worker la captura y confirma el mensaje sin error ni reintento innecesario.
+**Idempotencia (diseño objetivo, no implementado):** El worker ejecutaría un `UpdateItem` con `ConditionExpression = 'estado = :en_proceso'`. Si el usuario completó el pago antes de los 15 min, la condición fallaría silenciosamente y el worker confirmaría el mensaje sin reintento. En la implementación real, la idempotencia la da el chequeo de estado dentro de `_expire_pending()` (solo expira reservas que siguen en `PENDING`).
 
 ---
 
@@ -843,7 +844,7 @@ stateDiagram-v2
 | POST | `/admin/bloqueos` | JWT Bearer + rol ADMIN | `espacio_id, fecha, hora_inicio, hora_fin, motivo` | `201` bloqueo creado / `403` no es admin |
 | GET | `/admin/agenda/{complejoId}/{fecha}` | JWT Bearer + rol ADMIN | — | `200` agenda del día |
 
-**Autenticación:** JWT emitido por Cognito, validado en API Gateway mediante JWT Authorizer antes de llegar a Lambda. Lambda no valida el token — confía en que API Gateway ya lo rechazó si era inválido.
+**Autenticación:** Diseño original con Cognito + JWT Authorizer en API Gateway (ver §19.2). Implementación real en dev: JWT propio validado dentro de FastAPI/Lambda, sin Cognito.
 
 **Escalado:** Lambda escala automáticamente hasta 1,000 concurrencias. API Gateway tiene un throttling por defecto de 10,000 req/s. Para el MVP (~50 reservas/día) no se requiere configuración adicional. Si se crece a múltiples complejos, se revisará en producción.
 
@@ -867,7 +868,9 @@ Ningún rol tiene `AdministratorAccess` ni `Resource: "*"`, excepto SES por limi
 
 ### 19.2 Autenticación
 
-JWT emitido por **Amazon Cognito User Pool**. API Gateway valida el token antes de invocar Lambda. Lambda recibe el `userId` y `rol` del contexto del request, sin re-validar. Roles: `USER` y `ADMIN`, definidos como grupos en Cognito.
+**Diseño original (E5):** JWT emitido por Amazon Cognito User Pool, validado en API Gateway vía JWT Authorizer antes de invocar Lambda.
+
+**Implementación real (dev):** No se desplegó Cognito (no existe ningún User Pool en la cuenta). La app emite y valida su propio JWT con `python-jose` (`App/backend/app/auth.py`), firmado con un `SECRET_KEY` — leído desde Secrets Manager (`proyecto-trimestre2-dev-jwt-secret-v2`) en el Lambda demo, o desde variable de entorno en local. La validación ocurre dentro de FastAPI, no en API Gateway. Roles `USER`/`ADMIN` se modelan como columna en la tabla `users` (SQLite/SQLAlchemy), no como grupos de Cognito. Se documenta como decisión de alcance para el MVP académico, no como pendiente — migrar a Cognito es trabajo futuro si el proyecto pasa a producción.
 
 ### 19.3 Secretos
 
@@ -876,7 +879,7 @@ No hay secretos de base de datos (DynamoDB usa IAM roles). El único secreto es 
 ### 19.4 Cifrado
 
 - **En tránsito:** HTTPS en todos los endpoints (TLS 1.2+), certificado ACM en `grupo2.oyd.solid.com.gt`.
-- **En reposo:** DynamoDB con AWS-managed key (SSE habilitado por defecto), S3 con AES-256 (configurado en el módulo storage desde D2), SQS con SSE-SQS.
+- **En reposo:** DynamoDB con KMS CMK (`aws_kms_key.main`), S3 con SSE-KMS (actualizado en D5 desde el SSE-S3/AES-256 original de D2 — mismo CMK que protege Secrets Manager), SQS con SSE-SQS.
 
 ---
 
@@ -898,11 +901,15 @@ Cada invocación de Lambda emite JSON con campos: `reserva_id`, `usuario_id`, `a
 
 ### 20.3 Alarmas
 
+Alarmas reales desplegadas (`infra/modules/observability/main.tf`):
+
 | Alarma | Métrica | Threshold | Ventana | Acción |
 |---|---|---|---|---|
-| `alarm-api-error-rate` | Lambda Errors / Invocations | > 1% | 15 min | SNS → email al equipo |
-| `alarm-dlq-notifications` | `ApproximateNumberOfMessagesVisible` en notifications-dlq | > 0 | 5 min | SNS → email — indica notificaciones fallidas 3 veces |
-| `alarm-dlq-expiry` | `ApproximateNumberOfMessagesVisible` en expiry-dlq | > 0 | 5 min | SNS → email — indica bloqueos optimistas no liberados |
+| `proyecto-trimestre2-dev-api-5xx` | `5xxError` (API Gateway) | > `alarm_error_threshold` | `alarm_period_seconds` × `alarm_evaluation_periods` | SNS → email al equipo |
+| `proyecto-trimestre2-dev-async-consumer-errors` | `Errors` (Lambda `async-consumer`) | > 0 | 1 período | SNS → email al equipo |
+| `proyecto-trimestre2-dev-dlq-notifications` | `ApproximateNumberOfMessagesVisible` en la DLQ de `notifications` | > 0 | 5 min | SNS → email — indica notificaciones fallidas tras `maxReceiveCount` |
+
+**Pendiente:** alarma equivalente para la DLQ de la cola `reservations` (que cumple el rol de `expiry` en dev) — no implementada aún, mismo patrón que `dlq-notifications`.
 
 ### 20.4 Comportamiento ante Degradación de DynamoDB
 
@@ -937,6 +944,8 @@ Si DynamoDB no responde, la Lambda retorna `HTTP 503` al usuario. Los mensajes e
 | Riesgo | Probabilidad | Impacto | Mitigación |
 |---|---|---|---|
 | Cold start de Lambda en hora pico | Media | Bajo (200–500ms extra para primer usuario) | Provisioned Concurrency en ventanas 7–9h y 17–20h si métricas muestran quejas |
-| SES en sandbox — límite de envío a emails no verificados | Alta (en dev) | Medio — emails de confirmación no llegan | Solicitar salida de sandbox antes del lanzamiento a producción |
+| SES no desplegado — no existen identidades verificadas en la cuenta | Alta (en dev) | Medio — ninguna notificación se envía hoy, ni siquiera en sandbox | Pendiente real, no solo de sandbox: crear identidad SES verificada y el Lambda `notifications-worker` que la invoque. La cola `notifications` y su consumidor ya existen; falta el envío de email en sí |
+| Cognito no desplegado — auth real es JWT propio, no Cognito | Media | Bajo en dev (funciona igual para el MVP); alto si se reutiliza este código en producción sin revisar | Decisión documentada de alcance (§19.2). Migrar a Cognito + JWT Authorizer en API Gateway si el proyecto avanza a producción |
+| Expiración de bloqueo optimista es síncrona, no asíncrona | Media | Bajo — funciona igual para el usuario, pero solo libera el slot cuando alguien hace otra request, no exactamente a los 15 min si no hay tráfico | Construir el Lambda `expiry-worker` con `ConditionExpression` sobre DynamoDB, consumiendo la cola ya existente (`reservations`, con `delay_seconds=900`) |
 | DynamoDB hot partition si un espacio es muy popular | Baja | Alto — throttling en ese espacio | El partition key `ESPACIO#<id>` distribuye bien entre múltiples espacios; monitorear con CloudWatch `ThrottledRequests` |
 | Pérdida de mensajes en DLQ sin revisión | Media | Medio — notificaciones perdidas o bloqueos no liberados | Las alarmas de DLQ alertan en < 5 min; procedimiento manual documentado para redriving desde consola |

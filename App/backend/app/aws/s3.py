@@ -3,6 +3,7 @@ from functools import lru_cache
 from typing import Optional
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from ..config import settings
@@ -12,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
 def _get_client():
-    return boto3.client("s3", region_name=settings.aws_region)
+    return boto3.client(
+        "s3",
+        region_name=settings.aws_region,
+        config=Config(signature_version="s3v4"),
+    )
 
 
 def _key(reservation_code: str) -> str:
