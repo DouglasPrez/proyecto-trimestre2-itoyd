@@ -76,6 +76,18 @@ variable "sqs_queue_arn" {
   default     = ""
 }
 
+variable "sqs_notifications_queue_url" {
+  description = "URL of the notifications SQS queue."
+  type        = string
+  default     = ""
+}
+
+variable "sqs_notifications_queue_arn" {
+  description = "ARN of the notifications SQS queue for the event source mapping."
+  type        = string
+  default     = ""
+}
+
 variable "async_consumer_name" {
   description = "Base name for the async consumer Lambda function."
   type        = string

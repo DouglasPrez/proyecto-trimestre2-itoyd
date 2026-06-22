@@ -109,7 +109,10 @@ resource "aws_iam_role_policy" "compute_sqs" {
         Action = [
           "sqs:SendMessage"
         ]
-        Resource = var.async_queue_arn
+        Resource = [
+          var.async_queue_arn,
+          var.async_notifications_queue_arn
+        ]
       }
     ]
   })
@@ -216,7 +219,10 @@ resource "aws_iam_role_policy" "async_consumer_sqs" {
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes"
         ]
-        Resource = var.async_queue_arn
+        Resource = [
+          var.async_queue_arn,
+          var.async_notifications_queue_arn
+        ]
       }
     ]
   })
@@ -236,6 +242,28 @@ resource "aws_iam_role_policy" "async_consumer_s3" {
           "s3:PutObject"
         ]
         Resource = "${var.storage_bucket_arn}/*"
+      }
+    ]
+  })
+}
+
+# KMS — needed because the storage bucket has default SSE-KMS encryption;
+# without this, PutObject from the consumer fails with AccessDenied on kms:GenerateDataKey
+resource "aws_iam_role_policy" "async_consumer_kms" {
+  name = "${local.name_prefix}-async-consumer-kms-policy"
+  role = aws_iam_role.async_consumer.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "KMSGenerateDataKey"
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = var.kms_key_arn
       }
     ]
   })

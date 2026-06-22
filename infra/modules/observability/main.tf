@@ -93,6 +93,29 @@ resource "aws_cloudwatch_metric_alarm" "async_consumer_errors" {
   }
 }
 
+# Alarm 3 — Notifications DLQ depth (documento maestro §20.3 — alarm-dlq-notifications)
+resource "aws_cloudwatch_metric_alarm" "dlq_notifications" {
+  alarm_name          = "${local.name_prefix}-dlq-notifications"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 300
+  statistic           = "Maximum"
+  threshold           = 0
+  alarm_description   = "Notifications DLQ has messages — indica notificaciones fallidas tras maxReceiveCount"
+  alarm_actions       = [aws_sns_topic.alarms.arn]
+
+  dimensions = {
+    QueueName = var.notifications_dlq_name
+  }
+
+  tags = {
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 # ---------------------------------------------------------------------------
 # CloudWatch Dashboard
 # ---------------------------------------------------------------------------

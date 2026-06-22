@@ -18,6 +18,12 @@ variable "async_consumer_lambda_function_name" {
   type        = string
 }
 
+variable "notifications_dlq_name" {
+  description = "Name of the notifications dead-letter SQS queue. Used for the DLQ depth alarm."
+  type        = string
+  default     = ""
+}
+
 variable "log_retention_days" {
   description = "Number of days to retain CloudWatch log group data."
   type        = number
