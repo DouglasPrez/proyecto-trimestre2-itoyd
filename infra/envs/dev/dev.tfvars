@@ -30,10 +30,6 @@ async_consumer_name        = "async-consumer"
 async_consumer_memory_size = 128
 async_consumer_timeout     = 60
 
-Delivery6-infraApp
-- kms_key_alias  = "alias/proyecto-trimestre2-dev-cmk"   (tu rama, dos espacios)
-+ kms_key_alias = "alias/proyecto-trimestre2-dev-cmk"    (main, un espacio)
-
-main
+kms_key_alias = "alias/proyecto-trimestre2-dev-cmk"
 db_secret_name = "proyecto-trimestre2-dev-jwt-secret-v2"
 
