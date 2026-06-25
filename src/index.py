@@ -121,7 +121,24 @@ def handler(event: dict, context) -> dict:
 
     # GET / — health check
     if route_key == "GET /":
-        return _response(200, {"status": "ok", "service": "sportspace-api"})
+        checks = {}
+        try:
+            s3_client.head_object(Bucket=BUCKET_NAME, Key=".health-check")
+            checks["s3"] = "reachable"
+        except s3_client.exceptions.ClientError:
+            checks["s3"] = "reachable"
+        except Exception as e:
+            checks["s3"] = f"unreachable: {e}"
+
+        try:
+            dynamodb.Table(TABLE_NAME).scan(Limit=1, Select="COUNT")
+            checks["dynamodb"] = "reachable"
+        except Exception as e:
+            checks["dynamodb"] = f"unreachable: {e}"
+
+        all_ok = all(v == "reachable" for v in checks.values())
+        status_code = 200 if all_ok else 503
+        return _response(status_code, {"status": "ok" if all_ok else "unhealthy", **checks})
 
     return _response(404, {"error": f"Route not found: {route_key}"})
 
