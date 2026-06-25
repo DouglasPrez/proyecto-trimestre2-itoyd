@@ -29,6 +29,7 @@ import boto3
 import uuid
 import logging
 from datetime import datetime, timezone
+from boto3.dynamodb.conditions import Attr
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -68,7 +69,11 @@ def handler(event: dict, context) -> dict:
     # GET /reservations — lee de DynamoDB
     if route_key == "GET /reservations":
         table  = dynamodb.Table(TABLE_NAME)
-        result = table.scan(Limit=20)
+        status = (event.get("queryStringParameters") or {}).get("status")
+        if status:
+            result = table.scan(Limit=20, FilterExpression=Attr("estado").eq(status))
+        else:
+            result = table.scan(Limit=20)
         items  = result.get("Items", [])
         return _response(200, {"reservations": items, "count": len(items)})
 
