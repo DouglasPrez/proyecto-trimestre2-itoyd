@@ -63,6 +63,13 @@ App/backend/*.db
 App/backend/*.sqlite
 App/backend/dist/
 
+# SQLite database from test runs
+*.db
+*.sqlite
+
+# Pytest cache
+.pytest_cache/
+
 # Playwright
 node_modules/
 /test-results/
