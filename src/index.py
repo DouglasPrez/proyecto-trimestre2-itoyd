@@ -135,6 +135,7 @@ def async_consumer(event: dict, context) -> None:
         try:
             message_body = json.loads(record["body"])
             message_id = message_body.get("message_id", record.get("messageId", str(uuid.uuid4())))
+            message_body["processed_at"] = datetime.now(tz=timezone.utc).isoformat()
             timestamp  = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             object_key = f"async/{timestamp}-{message_id}.json"
 
