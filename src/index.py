@@ -66,16 +66,21 @@ def _response(status_code: int, body: dict) -> dict:
 def handler(event: dict, context) -> dict:
     route_key = event.get("routeKey", "")
 
-    # GET /reservations — lee de DynamoDB
+    # GET /reservations — lee de DynamoDB (D5)
     if route_key == "GET /reservations":
         table  = dynamodb.Table(TABLE_NAME)
-        status = (event.get("queryStringParameters") or {}).get("status")
+        params = event.get("queryStringParameters") or {}
+        status = params.get("status")
+        limit  = int(params.get("limit", 20))
+        offset = int(params.get("offset", 0))
+
+        scan_kwargs = {"Limit": limit + offset}
         if status:
-            result = table.scan(Limit=20, FilterExpression=Attr("estado").eq(status))
-        else:
-            result = table.scan(Limit=20)
-        items  = result.get("Items", [])
-        return _response(200, {"reservations": items, "count": len(items)})
+            scan_kwargs["FilterExpression"] = Attr("estado").eq(status)
+
+        result = table.scan(**scan_kwargs)
+        items  = (result.get("Items") or [])[offset:]
+        return _response(200, {"reservations": items, "count": len(items), "limit": limit, "offset": offset})
 
     # POST /vouchers — escribe en S3
     if route_key == "POST /vouchers":
